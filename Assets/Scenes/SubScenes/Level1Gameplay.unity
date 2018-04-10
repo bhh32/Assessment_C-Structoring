@@ -231,9 +231,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   rb: {fileID: 293519160}
-  speed: 50
-  rotate: 50
-  turnVal: 60
+  speed: 200
 --- !u!54 &293519160
 Rigidbody:
   m_ObjectHideFlags: 0
