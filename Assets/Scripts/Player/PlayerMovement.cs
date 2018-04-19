@@ -5,114 +5,80 @@ using XInputDotNetPure;
 
 public class PlayerMovement : MonoBehaviour 
 {
+    PlayerIndex player;
+    GamePadState contState;
+
     [SerializeField] Rigidbody rb;
-    public float idealRPM = 500f;
-    public float maxRPM = 1000f;
+    public GameObject wheel_FR;
+    public GameObject wheel_FL;
+    public GameObject wheel_RR;
+    public GameObject wheel_RL;
 
-    public Transform centerOfGravity;
+    public WheelCollider W_FL;
+    public WheelCollider W_FR;
+    public WheelCollider W_RR;
+    public WheelCollider W_RL;
 
-    public WheelCollider wheelFR;
-    public WheelCollider wheelFL;
-    public WheelCollider wheelRR;
-    public WheelCollider wheelRL;
+    public float torque = 1000f;
+    public float brakingTorque = 1000f;
+    public float lowestSteeringSpeed = 20f;
+    public float lowestSteeringAngle = 70f;
+    public float highestSteeringAngle = 40f;
 
-    public float turnRadius = 6f;
-    public float torque = 25f;
-    public float brakeTorque = 100f;
-
-    public float antiRoll = 20000;
-
-    public enum DriveMode
+    private void Awake()
     {
-        FRONT, REAR, ALL
-    };
-    public DriveMode driveMode = DriveMode.REAR;
-
-    // Insert Speed Text DEBUG
-
-	PlayerIndex playerCont;
-	GamePadState controllerState;
-
-	void Awake()
-	{
-		playerCont = PlayerIndex.One;
-        rb.centerOfMass = centerOfGravity.localPosition;
-	}
-
-    public float Speed()
-    {
-        return wheelRR.radius * Mathf.PI * wheelRR.rpm * 60f / 1000f;
+        player = PlayerIndex.One;
     }
 
-    public float Rpm()
+    private void FixedUpdate()
     {
-        return wheelRL.rpm;
+        contState = GamePad.GetState(player);
+
+        if (contState.IsConnected)
+            Move();
     }
 
-	void FixedUpdate () 
+    void Move()
     {
-		controllerState = GamePad.GetState (playerCont);
+        if (contState.Buttons.A == ButtonState.Pressed)
+        {
+            W_RL.motorTorque = torque;
+            W_RR.motorTorque = torque;
+        }
+        else if(contState.Buttons.A == ButtonState.Released && W_RR.motorTorque > 0f && contState.Buttons.B == ButtonState.Released || contState.Triggers.Left == 0f)
+        {
+            W_RL.motorTorque = Mathf.Lerp(torque, 0f, 1f);
+            W_RR.motorTorque = Mathf.Lerp(torque, 0f, 1f);
+        }
+        else if (contState.Buttons.B == ButtonState.Pressed)
+        {
+            W_RL.motorTorque = 0f;
+            W_RR.motorTorque = 0f;
+            W_RL.brakeTorque = brakingTorque;
+            W_RR.brakeTorque = brakingTorque;
+        }
+        else if (contState.Buttons.B == ButtonState.Released && W_RR.brakeTorque > 0f)
+        {
+            W_RL.brakeTorque = 0f;
+            W_RR.brakeTorque = 0f;
+        }
+        else if (contState.Triggers.Left > 0f)
+        {
+            W_RL.motorTorque = -torque * contState.Triggers.Left;
+            W_RR.motorTorque = -torque * contState.Triggers.Left;
+        }
+        else if(contState.Triggers.Left == 0f && W_RL.motorTorque < 0f)
+        {
+            W_RL.motorTorque = Mathf.Lerp(-torque, 0f, 1f);
+            W_RR.motorTorque = Mathf.Lerp(-torque, 0f, 1f);
+        }
 
-		if (controllerState.IsConnected) 
-		{
-            if (controllerState.Buttons.A == ButtonState.Pressed)
-            {
-                float scaledTorque = torque;
+        float speed = rb.velocity.magnitude / lowestSteeringSpeed;
+        float currentSteeringAngle = Mathf.Lerp(lowestSteeringAngle, highestSteeringAngle, speed);
 
-                if (wheelRL.rpm < idealRPM)
-                    scaledTorque = Mathf.Lerp(scaledTorque / 10f, scaledTorque, wheelRL.rpm / idealRPM);
-                else
-                    scaledTorque = Mathf.Lerp(scaledTorque, 0f, (wheelRL.rpm - idealRPM) / (maxRPM - idealRPM));
+        currentSteeringAngle *= contState.ThumbSticks.Left.X;
 
-                DoRollBar(wheelFR, wheelFL);
-                DoRollBar(wheelRR, wheelRL);
-
-                wheelFR.motorTorque = driveMode == DriveMode.REAR ? 0f : scaledTorque;
-                wheelFL.motorTorque = driveMode == DriveMode.REAR ? 0f : scaledTorque;
-                wheelRR.motorTorque = driveMode == DriveMode.FRONT ? 0f : scaledTorque;
-                wheelRL.motorTorque = driveMode == DriveMode.FRONT ? 0f : scaledTorque;
-            }
-
-            wheelFR.steerAngle = controllerState.ThumbSticks.Left.X * turnRadius;
-            wheelFL.steerAngle = controllerState.ThumbSticks.Left.X * turnRadius;
-
-            if (controllerState.Buttons.B == ButtonState.Pressed)
-            {
-                wheelFR.brakeTorque = brakeTorque;
-                wheelFL.brakeTorque = brakeTorque;
-                wheelRR.brakeTorque = brakeTorque;
-                wheelRL.brakeTorque = brakeTorque;
-            }
-            else
-            {
-                wheelFR.brakeTorque = 0f;
-                wheelFL.brakeTorque = 0f;
-                wheelRR.brakeTorque = 0f;
-                wheelRL.brakeTorque = 0f;
-            }
-		}
-	}
-
-    void DoRollBar(WheelCollider WheelL, WheelCollider wheelR)
-    {
-        WheelHit hit;
-        float travelL = 1f;
-        float travelR = 1f;
-
-        bool groundedL = WheelL.GetGroundHit(out hit);
-        if (groundedL)
-            travelL = (-WheelL.transform.InverseTransformPoint(hit.point).y - WheelL.radius) / WheelL.suspensionDistance;
-
-        bool groundedR = wheelR.GetGroundHit(out hit);
-        if (groundedR)
-            travelR = (-wheelR.transform.InverseTransformPoint(hit.point).y - wheelR.radius) / wheelR.suspensionDistance;
-
-        float antiRollForce = (travelL - travelR) * antiRoll;
-
-        if (groundedL)
-            rb.AddForceAtPosition(WheelL.transform.up * -antiRollForce, WheelL.transform.position);
-
-        if (groundedR)
-            rb.AddForceAtPosition(wheelR.transform.up * -antiRollForce, wheelR.transform.position);
+        W_FL.steerAngle = currentSteeringAngle;
+        W_FR.steerAngle = currentSteeringAngle;
     }
 }
