@@ -24,6 +24,8 @@ public class WorkerOrders : BaseUnitOrders
 
     [SerializeField] NavMeshAgent agent;
     [SerializeField] bool isSelected;
+    public bool IsSelected
+    { get { return isSelected; } }
     [SerializeField] Orders currentOrders;
 
     public Orders CurrentOrders
@@ -33,12 +35,17 @@ public class WorkerOrders : BaseUnitOrders
     }
 
     [SerializeField] GameObject selectedObj;
+    public GameObject SelectedObj
+    {
+        get { return SelectedObj; }
+        set { selectedObj = value; }
+    }
 
     void Awake()
     {
         CurrentOrders = Orders.EMPTY;
         properties.isSelected = false;
-        properties.maxCarryingAmt = 20f;
+        properties.maxCarryingAmt = 5f;
         properties.currentCarryingAmt = 0f;
         properties.armor = 0f;
         base.StartingMove(agent);
@@ -68,24 +75,18 @@ public class WorkerOrders : BaseUnitOrders
             else
                 CurrentOrders = Orders.EMPTY;
         }
-        else if (leftMouseClick && CurrentOrders == Orders.MINE)
+        else if (leftMouseClick && CurrentOrders == Orders.TAKE)
         {
-            if (selectedObj.CompareTag("Minable"))
-                Mine(agent, selectedObj);
+            if (selectedObj.CompareTag("Minable") || selectedObj.CompareTag("Choppable"))
+                TakeResource(agent, selectedObj);
             else
-                CurrentOrders = Orders.EMPTY;
+                CurrentOrders = Orders.MOVE;        
         }
-        else if (leftMouseClick && CurrentOrders == Orders.CHOP)
-        {
-            if (selectedObj.CompareTag("Choppable"))
-                ChopWood();
-            else
-                CurrentOrders = Orders.EMPTY;
-        }
-        else if (leftMouseClick || CurrentCarryingAmt >= 5f && CurrentOrders == Orders.UNLOAD)
+        else if (leftMouseClick || CurrentCarryingAmt <= MaxCarryingAmt && CurrentOrders == Orders.UNLOAD)
         {
             GameObject[] facs = GameObject.FindGameObjectsWithTag("Storage");
             var closestStorage = FindClosestStorage(agent, facs);
+            CurrentOrders = Orders.MOVE;
             Unload(agent, closestStorage);
         }
     }
@@ -103,11 +104,6 @@ public class WorkerOrders : BaseUnitOrders
     void Explore()
     {
         base.Explore();
-    }
-
-    void ChopWood()
-    {
-        base.ChopWood(agent, selectedObj);
     }
 
     GameObject TypeOfObj()

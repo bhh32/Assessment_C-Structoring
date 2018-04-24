@@ -5,6 +5,7 @@ using UnityEngine.AI;
 [RequireComponent(typeof(NavMeshAgent))]
 public class BaseUnitOrders : MonoBehaviour, UnitOrders
 {
+    // Keeps track of the previous resource visited
     GameObject previousResource = null;
 
     public void Move(NavMeshAgent agent)
@@ -15,11 +16,22 @@ public class BaseUnitOrders : MonoBehaviour, UnitOrders
         { agent.SetDestination(hit.point); }
     }
 
+    // Unit Moves After Being Spawned
     public void StartingMove(NavMeshAgent agent)
     {
-        Vector3 startPos = new Vector3(Random.Range(1f, 3f), 0f, Random.Range(1f, 3f));
+        Vector3 startPos = new Vector3(Random.Range(-3f, 3f), 0f, Random.Range(-1f, 1f));
 
         agent.SetDestination(transform.position + startPos);
+    }
+
+    public void Build(NavMeshAgent agent, GameObject building)
+    {
+        Ray buildingRay = Camera.main.ScreenPointToRay(Input.mousePosition);
+        RaycastHit hit;
+        if (Physics.Raycast(buildingRay, out hit, 200f))
+        {
+            
+        }
     }
 
     public void Attack(NavMeshAgent agent, GameObject defender)
@@ -30,43 +42,25 @@ public class BaseUnitOrders : MonoBehaviour, UnitOrders
     {
     }
 
-    public void ChopWood(NavMeshAgent agent, GameObject trees)
+    // Sends the player to the selected mine/previous mine
+    public void TakeResource(NavMeshAgent agent, GameObject resource)
     {
-        float dist = Vector3.Distance(agent.transform.position, trees.transform.position);
-        var harvestOrder = agent.GetComponent<WorkerOrders>();
-        var resource = trees.GetComponent<BaseResource>();
-        if (harvestOrder.CurrentCarryingAmt < harvestOrder.MaxCarryingAmt)
+        float dist = Vector3.Distance(agent.transform.position, resource.transform.position);
+        var takeOrder = agent.GetComponent<WorkerOrders>();
+
+        var resourceProperties = resource.GetComponent<BaseResource>();
+
+        if (takeOrder.CurrentCarryingAmt < takeOrder.MaxCarryingAmt)
         {
             if (dist > .5f)
             {
                 Move(agent);
-                StartCoroutine(MineralMove(dist, agent, trees));
+                StartCoroutine(ResourceMove(dist, agent, resource));
             }
-
-            resource.OnResourceMined();
-        }
-    }
-
-    public void Mine(NavMeshAgent agent, GameObject mineral)
-    {
-        float dist = Vector3.Distance(agent.transform.position, mineral.transform.position);
-        var miningOrder = agent.GetComponent<WorkerOrders>();
-        if (miningOrder.CurrentOrders != Orders.MINE)
-            miningOrder.CurrentOrders = Orders.MINE;
-
-        var resource = mineral.GetComponent<BaseResource>();
-        if (miningOrder.CurrentCarryingAmt < miningOrder.MaxCarryingAmt)
-        {
-            if (dist > .5f)
-            {
-                Move(agent);
-                StartCoroutine(MineralMove(dist, agent, mineral));
-            }
-
-            resource.OnResourceMined();
         }            
     }
 
+    // Moves the worker to the closest storage facility to unload current carrying capacity
     public void Unload(NavMeshAgent agent, GameObject storageFac)
     {
         float dist = Vector3.Distance(agent.transform.position, storageFac.transform.position);
@@ -74,6 +68,7 @@ public class BaseUnitOrders : MonoBehaviour, UnitOrders
         StartCoroutine(StorageMove(dist, agent, storageFac));
     }
 
+    // Finds the closest storage unit to the worker
     public GameObject FindClosestStorage(NavMeshAgent agent, GameObject[] storageFacilities)
     {
         float dist = 0f;
@@ -99,24 +94,19 @@ public class BaseUnitOrders : MonoBehaviour, UnitOrders
         return returnObj;
     }
 
-    public GameObject FindClosestMine(GameObject previousMine, GameObject[] mines)
+    // Finds the closest mine to the current mine the worker is working in
+    public GameObject FindClosestResource(GameObject previousResource, GameObject[] resources)
     {
-        float dist = 0f;
+        float dist = Mathf.Infinity;
         GameObject returnObj = null;
 
-        foreach (GameObject mine in mines)
+        foreach (GameObject resource in resources)
         {
-            float currentDist = Vector3.Distance(previousMine.transform.position, mine.transform.position);
+            float currentDist = Vector3.Distance(previousResource.transform.position, resource.transform.position);
 
-            if (mine == mines[0])
+            if (currentDist < dist && resource.GetComponent<BaseResource>().MaxAmt > 0f)
             {
-                returnObj = mine;
-                dist = currentDist;
-            }
-
-            if (currentDist < dist)
-            {
-                returnObj = mine;
+                returnObj = resource;
                 dist = currentDist;
             }
         }
@@ -124,49 +114,67 @@ public class BaseUnitOrders : MonoBehaviour, UnitOrders
         return returnObj;
     }
 
-    IEnumerator MineralMove(float dist, NavMeshAgent agent, GameObject mineral)
+    IEnumerator ResourceMove(float dist, NavMeshAgent agent, GameObject resource)
     {
-        previousResource = mineral;
+        if(previousResource != resource)
+            previousResource = resource;
 
-        if (agent.destination != mineral.transform.position)
-            agent.SetDestination(mineral.transform.position);
+        if (agent.destination != resource.transform.position)
+            agent.SetDestination(resource.transform.position);
 
         while (dist > .5f)
         {
-            dist = Vector3.Distance(agent.transform.position, mineral.transform.position);
+            dist = Vector3.Distance(agent.transform.position, resource.transform.position);
             yield return null;
         }
     }
 
     IEnumerator StorageMove(float dist, NavMeshAgent agent, GameObject facility)
     {
-        Debug.Log(previousResource.tag);
+        // Populate the resource array with the closest same type resource
+        GameObject[] resource = null;
+        switch (previousResource.tag)
+        {
+            case "Minable":
+                resource = GameObject.FindGameObjectsWithTag("Minable");
+                break;
+            case "Choppable":
+                resource = GameObject.FindGameObjectsWithTag("Choppable");
+                break;
+        }
+        // Ensure the order is TAKE
+        WorkerOrders orders = agent.GetComponent<WorkerOrders>();
+        if (orders.CurrentOrders != Orders.TAKE)
+            orders.CurrentOrders = Orders.TAKE;
+
         while (dist > 1.25f)
         {
             dist = Vector3.Distance(agent.transform.position, facility.transform.position);
             yield return null;
         }
-        agent.GetComponent<WorkerOrders>().CurrentCarryingAmt = 0f;
-        //TODO: NEW COROUTINE TO UNLOAD OVER TIME
 
-//        if (previousResource.GetComponent<BaseResource>().MaxAmt == 0f)
-//        {
-//            var mines = GameObject.FindGameObjectsWithTag("Minable");
-//
-//            previousResource = FindClosestMine(previousResource, mines);
-//
-//            if (Vector3.Distance(agent.transform.position, previousResource.transform.position) < 10f)
-//                Mine(agent, previousResource);
-//        }
-//        else
-//        {
-            Mine(agent, previousResource);
-//        }
+        //TODO: NEW COROUTINE TO UNLOAD OVER TIME
+        agent.GetComponent<WorkerOrders>().CurrentCarryingAmt = 0f;
+
+        if (previousResource.GetComponent<BaseResource>().MaxAmt > 0f)
+        {               
+            TakeResource(agent, previousResource);
+        }
+        else
+        {
+            // Set the previous resource visited
+            previousResource = FindClosestResource(previousResource, resource);
+            float dist2 = Vector3.Distance(agent.transform.position, previousResource.transform.position);
+            if (dist2 < 15f)
+                TakeResource(agent, previousResource);
+            else
+                agent.GetComponent<WorkerOrders>().CurrentOrders = Orders.MOVE;
+        }
 
     }
 
     public enum Orders
     {
-        MOVE, ATTACK, EXPLORE, CHOP, MINE, UNLOAD, EMPTY, ERROR
+        MOVE, BUILD, ATTACK, EXPLORE, TAKE, UNLOAD, EMPTY, ERROR
     }
 }

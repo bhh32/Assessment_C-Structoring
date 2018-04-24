@@ -12,46 +12,62 @@ public class BaseResource : MonoBehaviour
     GameObject currentWorker;
 
     public delegate void TakeResource();
-    public TakeResource OnResourceMined;
+    public TakeResource OnResourceHarvested;
 
     void Awake()
     {
         workers = new List<GameObject>();
-        OnResourceMined += Mine;
+        OnResourceHarvested += Harvest;
     }
 
     void OnTriggerEnter(Collider other)
     {
+        WorkerOrders orders = null;
+
         if (other.CompareTag("Worker"))
         {
-            workers.Add(other.gameObject);
+            orders = other.gameObject.GetComponent<WorkerOrders>();            
+        
+            // Redundant, but ensures that if worker walks over mine and is chopping
+            // wood it doesn't start mining instead, and vice versa.
+            if (MaxAmt > 0 && gameObject.CompareTag("Minable") 
+                && orders.CurrentOrders == BaseUnitOrders.Orders.TAKE)
+            {
+                OnResourceHarvested();
+                workers.Add(other.gameObject);
+            }
+            else if(MaxAmt > 0 && gameObject.CompareTag("Choppable") 
+                && orders.CurrentOrders == BaseUnitOrders.Orders.TAKE)
+            {
+                OnResourceHarvested();
+                workers.Add(other.gameObject);
+            }
         }
     }
 
     void OnTriggerExit(Collider other)
     {
-        if (other.CompareTag("Worker"))
+        if (workers.Contains(other.gameObject))
             workers.Remove(other.gameObject);
     }
 
-    public void Mine()
+    public void Harvest()
     {
-        StartCoroutine(Mining(harvestAmt));
+        StartCoroutine(Harvesting(harvestAmt));
     }
 
 
-    IEnumerator Mining(float amt)
+    IEnumerator Harvesting(float amt)
     {
         float harvested = 0f;
 
         while (harvested < amt && MaxAmt > 0f)
-        {
-            harvested++;
+        {   
             foreach (GameObject worker in workers)
-            {
-                
+            {   
+                harvested++;
                 var order = worker.GetComponent<WorkerOrders>();
-                order.CurrentCarryingAmt++;
+                order.CurrentCarryingAmt = harvested;
             }
 
             if (harvested > maxAmt)
@@ -71,12 +87,15 @@ public class BaseResource : MonoBehaviour
         foreach (GameObject worker in workers)
         {
             var orders = worker.GetComponent<WorkerOrders>();
-            Debug.Log("CurrentCarryingAmt: " + orders.CurrentCarryingAmt);
-            if (orders.CurrentCarryingAmt >= harvested)
-                orders.CurrentOrders = BaseUnitOrders.Orders.UNLOAD;
-            else
+            if (orders.CurrentCarryingAmt <= orders.MaxCarryingAmt || MaxAmt == 0f)
             {
-                Mine();
+                orders.CurrentOrders = BaseUnitOrders.Orders.UNLOAD;
+
+                if (MaxAmt == 0f)
+                {
+                    Destroy(gameObject);
+                }
+                
             }
         }
     }
