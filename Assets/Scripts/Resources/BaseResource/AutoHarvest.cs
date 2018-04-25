@@ -5,25 +5,37 @@ using UnityEngine.AI;
 
 public class AutoHarvest : MonoBehaviour 
 {
-    void OnMouseDown()
+    public delegate void RemoveUnit(GameObject removedUnit);
+    public RemoveUnit OnRemoveUnit;
+
+
+    [SerializeField] BaseUnitOrders.Orders currentOrders;
+  
+    // Fix this later, it's just to get it working
+    OrderSelection orderSelection;
+
+    void Awake()
     {
-        Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
-        RaycastHit hit;
+        orderSelection = GameObject.FindGameObjectWithTag("HUDManager").GetComponent<OrderSelection>();
+    }
 
-        if(Physics.Raycast(ray, out hit, 100f))
+    void FixedUpdate()
+    {
+        if (Input.GetMouseButtonUp(1))
         {
-            if (hit.collider.CompareTag("Choppable") || hit.collider.CompareTag("Minable"))
-            {
-                var selectedWorkers = GameObject.FindGameObjectsWithTag("Worker");
+            Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+            RaycastHit hit;
 
-                foreach (GameObject workers in selectedWorkers)
+            if (Physics.Raycast(ray, out hit, 100f))
+            {
+                if (hit.collider.CompareTag("Choppable") || hit.collider.CompareTag("Minable"))
                 {
-                    var workOrder = workers.GetComponent<WorkerOrders>();
-                    if (workOrder.IsSelected)
+                    orderSelection.Harvest();
+
+                    foreach (GameObject worker in orderSelection.ReturnSelectedUnits())
                     {
-                        workOrder.SelectedObj = hit.collider.gameObject;
-                        workOrder.CurrentOrders = BaseUnitOrders.Orders.TAKE;
-                        workOrder.GetComponent<NavMeshAgent>().SetDestination(hit.collider.transform.position);
+                        worker.GetComponent<NavMeshAgent>().SetDestination(gameObject.transform.position);
+                        currentOrders = worker.GetComponent<WorkerOrders>().CurrentOrders;
                     }
                 }
             }
