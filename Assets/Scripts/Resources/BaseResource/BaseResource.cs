@@ -7,6 +7,7 @@ public class BaseResource : MonoBehaviour
 {
     [SerializeField] protected float maxAmt;
     [SerializeField] protected float harvestAmt;
+    ScriptableInstCreator listOfResources;
 
     public float MaxAmt{ get { return maxAmt; } }
     List<GameObject> workers;
@@ -19,6 +20,11 @@ public class BaseResource : MonoBehaviour
     {
         workers = new List<GameObject>();
         OnResourceHarvested += Harvest;
+    }
+
+    void Start()
+    {
+        //listOfResources.resourceLists.OnAddResource(gameObject);
     }
 
     void OnTriggerEnter(Collider other)
@@ -100,6 +106,7 @@ public class BaseResource : MonoBehaviour
 
                     worker.GetComponent<NavMeshAgent>().SetDestination(closestStorage.transform.position);
                     orders.CurrentOrders = BaseUnitOrders.Orders.UNLOAD;
+                    //listOfResources.resourceLists.OnRemoveResource(gameObject);
                     gameObject.SetActive(false);
                 }
                 

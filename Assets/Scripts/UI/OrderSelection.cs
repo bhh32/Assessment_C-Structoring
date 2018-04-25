@@ -6,29 +6,24 @@ using UnityEngine.EventSystems;
 public class OrderSelection : MonoBehaviour
 {
     [SerializeField] GameObject selectedUnit;
-    public GameObject SelectedUnit
+
+    [SerializeField] public List<GameObject> selectedUnits; 
+    public GameObject SelectedUnits
     {
         get { return selectedUnit; }
-        set { selectedUnit = value; }
-    }
-
-    [SerializeField] GameObject[] selectedUnits;
-    public GameObject[] SelectedUnits
-    {
-        get { return selectedUnits; }
-        set
-        {
-            for (int i = 0; i < selectedUnits.Length; i++)
-            {
-                selectedUnits[i] = value[i];
-            }
+        set 
+        { 
+            selectedUnit = value; 
+            selectedUnits.Add(selectedUnit); 
         }
     }
+    [SerializeField] BaseUnitOrders.Orders currentOrders;
 
     void Awake()
     {
         selectedUnit = null;
-        selectedUnits = null;
+        //selectedUnits = null;
+        selectedUnits = new List<GameObject>(); 
     }
 
     bool ValidSelection()
@@ -46,24 +41,20 @@ public class OrderSelection : MonoBehaviour
 
     public void Harvest()
     {
-        if (!EventSystem.current.IsPointerOverGameObject())
-        {
-            selectedUnit.GetComponent<WorkerOrders>().CurrentOrders = BaseUnitOrders.Orders.EMPTY;
-            if (ValidSelection() && selectedUnit.CompareTag("Worker"))
+        //Ray mouseRay = Camera.main.ScreenPointToRay(Input.mousePosition);
+        //RaycastHit hit;
+
+        //if(Physics.Raycast(mouseRay, out hit, 100f, 5))
+        //{
+            foreach (GameObject unit in selectedUnits)
             {
-                selectedUnit.GetComponent<WorkerOrders>().CurrentOrders = BaseUnitOrders.Orders.TAKE;
-            }
-            else if (ValidSelection())
-            {
-                foreach (GameObject unit in selectedUnits)
+                if (unit.CompareTag("Worker"))
                 {
-                    if (unit.CompareTag("Worker"))
-                    {
-                        unit.GetComponent<WorkerOrders>().CurrentOrders = BaseUnitOrders.Orders.TAKE;
-                    }
+                    unit.GetComponent<WorkerOrders>().CurrentOrders = BaseUnitOrders.Orders.TAKE;
+                    currentOrders = unit.GetComponent<WorkerOrders>().CurrentOrders;
                 }
             }
-        }
+        //}
     }
 
     public void Build()
@@ -83,5 +74,10 @@ public class OrderSelection : MonoBehaviour
             }
         }
     }
-        
+     
+
+    public GameObject[] ReturnSelectedUnits()
+    {
+        return selectedUnits.ToArray();
+    }
 }

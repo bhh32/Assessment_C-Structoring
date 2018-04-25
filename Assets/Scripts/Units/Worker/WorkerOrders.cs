@@ -8,6 +8,7 @@ public class WorkerOrders : BaseUnitOrders
 {
     UnitProperties properties;
     OrderSelection orderSelection;
+    AutoHarvest harvestOrder;
 
     public float MaxCarryingAmt
     {
@@ -59,12 +60,28 @@ public class WorkerOrders : BaseUnitOrders
     {
         if (isSelected)
         {
-            orderSelection.SelectedUnit = gameObject;
+            if (!orderSelection.selectedUnits.Contains(gameObject))
+                orderSelection.SelectedUnits = gameObject;
+    
             selectedObj = TypeOfObj();
 
 
             IssueOrders();
-        } 
+        }
+        else if (!isSelected)
+        {
+            if (orderSelection.selectedUnits.Contains(gameObject))
+            {
+                for (int i = 0; i < orderSelection.selectedUnits.Count; ++i)
+                {
+                    if (gameObject.Equals(orderSelection.selectedUnits[i]))
+                    {
+                        orderSelection.selectedUnits.RemoveAt(i);
+                        break;
+                    }
+                }
+            }
+        }
         Debug.DrawLine(transform.position, agent.destination);
         agent.isStopped = false;
 	}
