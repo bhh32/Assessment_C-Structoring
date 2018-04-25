@@ -15,6 +15,8 @@ public class Buildings : MonoBehaviour
     private GameObject foundation;
     public GameObject Foundation
     { get { return foundation; } }
+	
+	//public GameObject Foundation { get; private set; } // ???
 
     [SerializeField] GameObject currentBuilding;
     public GameObject CurrentBuilding
