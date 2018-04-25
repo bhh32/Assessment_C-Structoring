@@ -7,13 +7,16 @@ public class BaseUnitOrders : MonoBehaviour, UnitOrders
 {
     // Keeps track of the previous resource visited
     GameObject previousResource = null;
+    [SerializeField] float stoppingDistance;
 
     public void Move(NavMeshAgent agent)
     {
+        if (agent.isStopped)
+            agent.isStopped = false;
         Ray newPos = Camera.main.ScreenPointToRay(Input.mousePosition);
         RaycastHit hit;
         if(Physics.Raycast(newPos, out hit, 200f))
-        { agent.SetDestination(hit.point); }
+        { agent.SetDestination(hit.point); Debug.Log(hit.collider.name); }
     }
 
     // Unit Moves After Being Spawned
@@ -24,14 +27,39 @@ public class BaseUnitOrders : MonoBehaviour, UnitOrders
         agent.SetDestination(transform.position + startPos);
     }
 
-    public void Build(NavMeshAgent agent, GameObject building)
+    public void Build(NavMeshAgent agent, GameObject foundation, GameObject building)
     {
-        Ray buildingRay = Camera.main.ScreenPointToRay(Input.mousePosition);
-        RaycastHit hit;
-        if (Physics.Raycast(buildingRay, out hit, 200f))
+        MoveToBuild(agent, foundation);
+
+        GameObject newBuilding = null;
+        newBuilding = Instantiate(building, foundation.transform.position, Quaternion.identity) as GameObject;
+        newBuilding.transform.parent = GameObject.FindWithTag("BuildingContainer").transform;
+
+        agent.GetComponent<WorkerOrders>().CurrentOrders = Orders.EMPTY;
+    }
+
+    public void MoveToBuild(NavMeshAgent agent, GameObject foundation)
+    {
+        StartCoroutine(MoveToFoundation(agent, foundation));
+    }
+
+    IEnumerator MoveToFoundation(NavMeshAgent agent, GameObject foundation)
+    {
+        float dist = Vector3.Distance(agent.transform.position, foundation.transform.position);
+        agent.SetDestination(foundation.transform.position);
+
+        while (dist > stoppingDistance)
         {
-            
+            dist = Vector3.Distance(agent.transform.position, foundation.transform.position);
+
+            yield return null;
         }
+
+        if (dist < stoppingDistance)
+        {
+            agent.isStopped = true;
+        }
+
     }
 
     public void Attack(NavMeshAgent agent, GameObject defender)
@@ -133,44 +161,47 @@ public class BaseUnitOrders : MonoBehaviour, UnitOrders
     {
         // Populate the resource array with the closest same type resource
         GameObject[] resource = null;
-        switch (previousResource.tag)
+        if (previousResource != null)
         {
-            case "Minable":
-                resource = GameObject.FindGameObjectsWithTag("Minable");
-                break;
-            case "Choppable":
-                resource = GameObject.FindGameObjectsWithTag("Choppable");
-                break;
-        }
-        // Ensure the order is TAKE
-        WorkerOrders orders = agent.GetComponent<WorkerOrders>();
-        if (orders.CurrentOrders != Orders.TAKE)
-            orders.CurrentOrders = Orders.TAKE;
+            switch (previousResource.tag)
+            {
+                case "Minable":
+                    resource = GameObject.FindGameObjectsWithTag("Minable");
+                    break;
+                case "Choppable":
+                    resource = GameObject.FindGameObjectsWithTag("Choppable");
+                    break;
+            }
+       
+            // Ensure the order is TAKE
+            WorkerOrders orders = agent.GetComponent<WorkerOrders>();
+            if (orders.CurrentOrders != Orders.TAKE)
+                orders.CurrentOrders = Orders.TAKE;
 
-        while (dist > 1.25f)
-        {
-            dist = Vector3.Distance(agent.transform.position, facility.transform.position);
-            yield return null;
-        }
+            while (dist > 1.25f)
+            {
+                dist = Vector3.Distance(agent.transform.position, facility.transform.position);
+                yield return null;
+            }
 
-        //TODO: NEW COROUTINE TO UNLOAD OVER TIME
-        agent.GetComponent<WorkerOrders>().CurrentCarryingAmt = 0f;
+            //TODO: NEW COROUTINE TO UNLOAD OVER TIME
+            agent.GetComponent<WorkerOrders>().CurrentCarryingAmt = 0f;
 
-        if (previousResource.GetComponent<BaseResource>().MaxAmt > 0f)
-        {               
-            TakeResource(agent, previousResource);
-        }
-        else
-        {
-            // Set the previous resource visited
-            previousResource = FindClosestResource(previousResource, resource);
-            float dist2 = Vector3.Distance(agent.transform.position, previousResource.transform.position);
-            if (dist2 < 15f)
+            if (previousResource.GetComponent<BaseResource>().MaxAmt > 0f)
+            {               
                 TakeResource(agent, previousResource);
+            }
             else
-                agent.GetComponent<WorkerOrders>().CurrentOrders = Orders.MOVE;
+            {
+                // Set the previous resource visited
+                previousResource = FindClosestResource(previousResource, resource);
+                float dist2 = Vector3.Distance(agent.transform.position, previousResource.transform.position);
+                if (dist2 < 15f)
+                    TakeResource(agent, previousResource);
+                else
+                    agent.GetComponent<WorkerOrders>().CurrentOrders = Orders.MOVE;
+            }
         }
-
     }
 
     public enum Orders

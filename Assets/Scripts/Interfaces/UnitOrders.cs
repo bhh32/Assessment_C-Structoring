@@ -6,6 +6,7 @@ using UnityEngine.AI;
 public interface UnitOrders
 {
     void Move(NavMeshAgent agent);
+    void Build(NavMeshAgent agent, GameObject foundation, GameObject building);
     void Attack(NavMeshAgent agent, GameObject defender);
     void Explore();
     void TakeResource(NavMeshAgent agent, GameObject mineral);

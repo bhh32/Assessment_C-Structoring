@@ -1,6 +1,7 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.AI;
 
 public class BaseResource : MonoBehaviour 
 {
@@ -93,7 +94,13 @@ public class BaseResource : MonoBehaviour
 
                 if (MaxAmt == 0f)
                 {
-                    Destroy(gameObject);
+                    GameObject[] storage = GameObject.FindGameObjectsWithTag("Storage");
+
+                    GameObject closestStorage = orders.FindClosestStorage(worker.GetComponent<NavMeshAgent>(), storage);
+
+                    worker.GetComponent<NavMeshAgent>().SetDestination(closestStorage.transform.position);
+                    orders.CurrentOrders = BaseUnitOrders.Orders.UNLOAD;
+                    gameObject.SetActive(false);
                 }
                 
             }

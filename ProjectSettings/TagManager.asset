@@ -8,6 +8,9 @@ TagManager:
   - Minable
   - Storage
   - Worker
+  - BuildHere
+  - BuildingContainer
+  - HUDManager
   layers:
   - Default
   - TransparentFX

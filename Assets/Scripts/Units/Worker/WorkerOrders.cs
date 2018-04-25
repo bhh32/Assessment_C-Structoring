@@ -2,10 +2,12 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
-
+// GO HERE TO SEE HOW TO BLOCK RAYCASTING WITH UI
+// https://docs.unity3d.com/ScriptReference/EventSystems.EventSystem.IsPointerOverGameObject.html
 public class WorkerOrders : BaseUnitOrders 
 {
     UnitProperties properties;
+    OrderSelection orderSelection;
 
     public float MaxCarryingAmt
     {
@@ -43,6 +45,7 @@ public class WorkerOrders : BaseUnitOrders
 
     void Awake()
     {
+        orderSelection = GameObject.FindGameObjectWithTag("HUDManager").GetComponent<OrderSelection>();
         CurrentOrders = Orders.EMPTY;
         properties.isSelected = false;
         properties.maxCarryingAmt = 5f;
@@ -56,24 +59,31 @@ public class WorkerOrders : BaseUnitOrders
     {
         if (isSelected)
         {
+            orderSelection.SelectedUnit = gameObject;
             selectedObj = TypeOfObj();
 
+
             IssueOrders();
-        }            
+        } 
+        Debug.DrawLine(transform.position, agent.destination);
+        agent.isStopped = false;
 	}
 
     void IssueOrders()
     {
         bool leftMouseClick = Input.GetMouseButtonUp(0);
 
+        if (UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject())
+            return;
+
         if (leftMouseClick && CurrentOrders == Orders.MOVE)
             Move(agent);
-        else if (leftMouseClick && CurrentOrders == Orders.ATTACK)
+        else if (leftMouseClick && CurrentOrders == Orders.BUILD)
         {
-            if (selectedObj.CompareTag("Enemy"))
-                Attack();
+            if (selectedObj.CompareTag("BuildHere"))
+                MoveToBuild(agent, selectedObj);
             else
-                CurrentOrders = Orders.EMPTY;
+                CurrentOrders = Orders.MOVE;
         }
         else if (leftMouseClick && CurrentOrders == Orders.TAKE)
         {
@@ -89,21 +99,6 @@ public class WorkerOrders : BaseUnitOrders
             CurrentOrders = Orders.MOVE;
             Unload(agent, closestStorage);
         }
-    }
-
-    void Move()
-    {
-        base.Move(agent);
-    }
-
-    void Attack()
-    {
-        base.Attack(agent, selectedObj);
-    }
-
-    void Explore()
-    {
-        base.Explore();
     }
 
     GameObject TypeOfObj()
