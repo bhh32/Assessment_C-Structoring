@@ -16,7 +16,7 @@ public class BaseUnitOrders : MonoBehaviour, UnitOrders
         Ray newPos = Camera.main.ScreenPointToRay(Input.mousePosition);
         RaycastHit hit;
         if(Physics.Raycast(newPos, out hit, 200f))
-        { agent.SetDestination(hit.point); Debug.Log(hit.collider.name); }
+        { agent.SetDestination(hit.point); }
     }
 
     // Unit Moves After Being Spawned
@@ -196,10 +196,18 @@ public class BaseUnitOrders : MonoBehaviour, UnitOrders
                 // Set the previous resource visited
                 previousResource = FindClosestResource(previousResource, resource);
                 float dist2 = Vector3.Distance(agent.transform.position, previousResource.transform.position);
-                if (dist2 < 15f)
-                    TakeResource(agent, previousResource);
-                else
-                    agent.GetComponent<WorkerOrders>().CurrentOrders = Orders.MOVE;
+                if (previousResource.CompareTag("Mining"))
+                {
+                    if (dist2 < 15f)
+                        TakeResource(agent, previousResource);
+                    else
+                        agent.GetComponent<WorkerOrders>().CurrentOrders = Orders.MOVE;
+                }
+                else if (previousResource.CompareTag("Choppable"))
+                {
+                    if (previousResource != null)
+                        TakeResource(agent, previousResource);
+                }
             }
         }
     }

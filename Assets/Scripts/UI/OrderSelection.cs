@@ -12,6 +12,9 @@ public class OrderSelection : MonoBehaviour
         set { selectedUnit = value; }
     }
 
+    [SerializeField] BaseUnitOrders.Orders currentOrder;
+    [SerializeField] GameObject hoveredObj;
+
     [SerializeField] GameObject[] selectedUnits;
     public GameObject[] SelectedUnits
     {
@@ -46,23 +49,33 @@ public class OrderSelection : MonoBehaviour
 
     public void Harvest()
     {
-        if (!EventSystem.current.IsPointerOverGameObject())
+        Ray mouseRay = Camera.main.ScreenPointToRay(Input.mousePosition);
+        RaycastHit hit;
+
+        if (Physics.Raycast(mouseRay, out hit, 100f, 5))
         {
-            selectedUnit.GetComponent<WorkerOrders>().CurrentOrders = BaseUnitOrders.Orders.EMPTY;
-            if (ValidSelection() && selectedUnit.CompareTag("Worker"))
+            hoveredObj = hit.collider.gameObject;
+            if (selectedUnit.GetComponent<WorkerOrders>() != null)
             {
-                selectedUnit.GetComponent<WorkerOrders>().CurrentOrders = BaseUnitOrders.Orders.TAKE;
+                selectedUnit.GetComponent<WorkerOrders>().CurrentOrders = BaseUnitOrders.Orders.EMPTY;
+            
+                currentOrder = selectedUnit.GetComponent<WorkerOrders>().CurrentOrders;
             }
-            else if (ValidSelection())
-            {
-                foreach (GameObject unit in selectedUnits)
+                if (ValidSelection() && selectedUnit.CompareTag("Worker"))
                 {
-                    if (unit.CompareTag("Worker"))
-                    {
-                        unit.GetComponent<WorkerOrders>().CurrentOrders = BaseUnitOrders.Orders.TAKE;
-                    }
+                    selectedUnit.GetComponent<WorkerOrders>().CurrentOrders = BaseUnitOrders.Orders.TAKE;
+                    currentOrder = selectedUnit.GetComponent<WorkerOrders>().CurrentOrders;
                 }
-            }
+                else if (ValidSelection())
+                {
+                    foreach (GameObject unit in selectedUnits)
+                    {
+                        if (unit.CompareTag("Worker"))
+                        {
+                            unit.GetComponent<WorkerOrders>().CurrentOrders = BaseUnitOrders.Orders.TAKE;
+                        }
+                    }
+                }           
         }
     }
 

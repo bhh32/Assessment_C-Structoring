@@ -7,7 +7,7 @@ using UnityEngine.AI;
 public class WorkerOrders : BaseUnitOrders 
 {
     UnitProperties properties;
-    OrderSelection orderSelection;
+    [SerializeField] OrderSelection orderSelection;
 
     public float MaxCarryingAmt
     {
@@ -45,7 +45,6 @@ public class WorkerOrders : BaseUnitOrders
 
     void Awake()
     {
-        orderSelection = GameObject.FindGameObjectWithTag("HUDManager").GetComponent<OrderSelection>();
         CurrentOrders = Orders.EMPTY;
         properties.isSelected = false;
         properties.maxCarryingAmt = 5f;
@@ -59,13 +58,10 @@ public class WorkerOrders : BaseUnitOrders
     {
         if (isSelected)
         {
-            orderSelection.SelectedUnit = gameObject;
             selectedObj = TypeOfObj();
-
-
+            orderSelection.SelectedUnit = selectedObj;
             IssueOrders();
         } 
-        Debug.DrawLine(transform.position, agent.destination);
         agent.isStopped = false;
 	}
 
