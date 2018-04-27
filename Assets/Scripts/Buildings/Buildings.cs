@@ -12,11 +12,12 @@ public class Buildings : MonoBehaviour
         get{ return canBuild; }
     }
     NavMeshAgent agent;
-    private GameObject foundation;
+    [SerializeField] GameObject foundation;
     public GameObject Foundation
-    { get { return foundation; } }
-	
-	//public GameObject Foundation { get; private set; } // ???
+    {
+        get { return foundation; }
+        private set { foundation = value; }
+    }
 
     [SerializeField] GameObject currentBuilding;
     public GameObject CurrentBuilding
@@ -43,8 +44,17 @@ public class Buildings : MonoBehaviour
             agent = other.GetComponent<NavMeshAgent>();
             agent.isStopped = true;
             canBuild = false;
-            other.GetComponent<WorkerOrders>().Build(agent, gameObject, CurrentBuilding);
+            BuildAction(agent, CurrentBuilding);
         }
+    }
+
+    void BuildAction(NavMeshAgent agent, GameObject building)
+    {
+        GameObject newBuilding = null;
+        newBuilding = Instantiate(building, transform.position, Quaternion.identity) as GameObject;
+        newBuilding.transform.parent = GameObject.FindWithTag("BuildingContainer").transform;
+
+        agent.GetComponent<WorkerOrders>().CurrentOrders = BaseUnitOrders.Orders.MOVE;
     }
 
     void SetBuilding(GameObject building)

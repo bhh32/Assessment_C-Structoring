@@ -1,118 +1,3 @@
-<<<<<<< HEAD
-﻿using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
-using UnityEngine.AI;
-// GO HERE TO SEE HOW TO BLOCK RAYCASTING WITH UI
-// https://docs.unity3d.com/ScriptReference/EventSystems.EventSystem.IsPointerOverGameObject.html
-public class WorkerOrders : BaseUnitOrders 
-{
-    UnitProperties properties;
-    [SerializeField] OrderSelection orderSelection;
-
-    public float MaxCarryingAmt
-    {
-        get { return properties.maxCarryingAmt; }
-    }
-
-    public float CurrentCarryingAmt
-    {
-        get { return properties.currentCarryingAmt; }
-        set 
-        { 
-            properties.currentCarryingAmt = value;
-            Debug.Log(properties.currentCarryingAmt);
-        }
-    }
-
-    [SerializeField] NavMeshAgent agent;
-    [SerializeField] bool isSelected;
-    public bool IsSelected
-    { get { return isSelected; } }
-    [SerializeField] Orders currentOrders;
-
-    public Orders CurrentOrders
-    {
-        get { return currentOrders; }
-        set { currentOrders = value; }
-    }
-
-    [SerializeField] GameObject selectedObj;
-    public GameObject SelectedObj
-    {
-        get { return SelectedObj; }
-        set { selectedObj = value; }
-    }
-
-    void Awake()
-    {
-        CurrentOrders = Orders.EMPTY;
-        properties.isSelected = false;
-        properties.maxCarryingAmt = 5f;
-        properties.currentCarryingAmt = 0f;
-        properties.armor = 0f;
-        base.StartingMove(agent);
-    }
-	
-	// Update is called once per frame
-	void Update () 
-    {
-        if (isSelected)
-        {
-            selectedObj = TypeOfObj();
-            orderSelection.SelectedUnit = selectedObj;
-            IssueOrders();
-        } 
-        agent.isStopped = false;
-	}
-
-    void IssueOrders()
-    {
-        bool leftMouseClick = Input.GetMouseButtonUp(0);
-
-        if (UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject())
-            return;
-
-        if (leftMouseClick && CurrentOrders == Orders.MOVE)
-            Move(agent);
-        else if (leftMouseClick && CurrentOrders == Orders.BUILD)
-        {
-            if (selectedObj.CompareTag("BuildHere"))
-                MoveToBuild(agent, selectedObj);
-            else
-                CurrentOrders = Orders.MOVE;
-        }
-        else if (leftMouseClick && CurrentOrders == Orders.TAKE)
-        {
-            if (selectedObj.CompareTag("Minable") || selectedObj.CompareTag("Choppable"))
-                TakeResource(agent, selectedObj);
-            else
-                CurrentOrders = Orders.MOVE;        
-        }
-        else if (leftMouseClick || CurrentCarryingAmt <= MaxCarryingAmt && CurrentOrders == Orders.UNLOAD)
-        {
-            GameObject[] facs = GameObject.FindGameObjectsWithTag("Storage");
-            var closestStorage = FindClosestStorage(agent, facs);
-            CurrentOrders = Orders.MOVE;
-            Unload(agent, closestStorage);
-        }
-    }
-
-    GameObject TypeOfObj()
-    {
-        Camera mainCamera = FindObjectOfType<Camera>();
-        Ray ray = mainCamera.ScreenPointToRay(Input.mousePosition);
-        RaycastHit hit;
-
-        GameObject returnedObj = null;
-
-        if (Physics.Raycast(ray, out hit, 100f))
-            returnedObj = hit.collider.gameObject;
-
-        return returnedObj;
-    }
-}
-=======
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -124,6 +9,8 @@ public class WorkerOrders : BaseUnitOrders
     UnitProperties properties;
     OrderSelection orderSelection;
     AutoHarvest harvestOrder;
+    public GameObject PreviousResource
+    { get { return previousResource; } }
 
     public float MaxCarryingAmt
     {
@@ -143,7 +30,10 @@ public class WorkerOrders : BaseUnitOrders
     [SerializeField] NavMeshAgent agent;
     [SerializeField] bool isSelected;
     public bool IsSelected
-    { get { return isSelected; } }
+    {
+        get { return isSelected; }
+        set { isSelected = value; }
+    }
     [SerializeField] Orders currentOrders;
 
     public Orders CurrentOrders
@@ -161,7 +51,7 @@ public class WorkerOrders : BaseUnitOrders
 
     void Awake()
     {
-        orderSelection = GameObject.FindGameObjectWithTag("HUDManager").GetComponent<OrderSelection>();
+        orderSelection = GameObject.Find("HUD Manager").GetComponent<OrderSelection>();
         CurrentOrders = Orders.EMPTY;
         properties.isSelected = false;
         properties.maxCarryingAmt = 5f;
@@ -171,7 +61,7 @@ public class WorkerOrders : BaseUnitOrders
     }
 	
 	// Update is called once per frame
-	void Update () 
+	void FixedUpdate () 
     {
         if (isSelected)
         {
@@ -196,6 +86,8 @@ public class WorkerOrders : BaseUnitOrders
                     }
                 }
             }
+
+            AutoIssue();
         }
         Debug.DrawLine(transform.position, agent.destination);
         agent.isStopped = false;
@@ -204,27 +96,75 @@ public class WorkerOrders : BaseUnitOrders
     void IssueOrders()
     {
         bool leftMouseClick = Input.GetMouseButtonUp(0);
+        bool rightMouseclick = Input.GetMouseButtonUp(1);
 
-        if (UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject())
-            return;
+        // Issue Specific Orders To The Worker
+        switch (leftMouseClick)
+        {
+            case true:
+                if (CurrentOrders == Orders.MOVE)
+                    Move(agent);
+                else if (CurrentOrders == Orders.BUILD)
+                {
+                    if (selectedObj.CompareTag("BuildHere"))
+                        MoveToBuild(agent, selectedObj);
+                    else
+                        CurrentOrders = Orders.MOVE;
+                }
+                else if (CurrentOrders == Orders.TAKE)
+                {
+                    if (selectedObj.CompareTag("Minable") || selectedObj.CompareTag("Choppable"))
+                        TakeResource(agent, selectedObj);
+                    else
+                        CurrentOrders = Orders.MOVE;
+                }
+                else if (CurrentCarryingAmt <= MaxCarryingAmt && CurrentOrders == Orders.UNLOAD)
+                {
+                    GameObject[] facs = GameObject.FindGameObjectsWithTag("Storage");
+                    var closestStorage = FindClosestStorage(agent, facs);
+                    CurrentOrders = Orders.MOVE;
+                    Unload(agent, closestStorage);
+                }
 
-        if (leftMouseClick && CurrentOrders == Orders.MOVE)
-            Move(agent);
-        else if (leftMouseClick && CurrentOrders == Orders.BUILD)
-        {
-            if (selectedObj.CompareTag("BuildHere"))
-                MoveToBuild(agent, selectedObj);
-            else
-                CurrentOrders = Orders.MOVE;
+                break;
+
+            case false:
+                break;
         }
-        else if (leftMouseClick && CurrentOrders == Orders.TAKE)
+
+        // Issue Default Orders to the worker
+        switch (rightMouseclick)
         {
-            if (selectedObj.CompareTag("Minable") || selectedObj.CompareTag("Choppable"))
-                TakeResource(agent, selectedObj);
-            else
-                CurrentOrders = Orders.MOVE;        
+            case true:
+                if (selectedObj.CompareTag("BuildHere"))
+                {
+                    CurrentOrders = Orders.BUILD;
+                    MoveToBuild(agent, selectedObj);
+                }
+                else if (selectedObj.CompareTag("Minable") || selectedObj.CompareTag("Choppable"))
+                {
+                    CurrentOrders = Orders.TAKE;
+                   TakeResource(agent, selectedObj);
+                }
+
+                break;
+
+            case false:
+                break;
         }
-        else if (leftMouseClick || CurrentCarryingAmt <= MaxCarryingAmt && CurrentOrders == Orders.UNLOAD)
+
+        if (CurrentCarryingAmt <= MaxCarryingAmt && CurrentOrders == Orders.UNLOAD)
+        {
+            GameObject[] facs = GameObject.FindGameObjectsWithTag("Storage");
+            var closestStorage = FindClosestStorage(agent, facs);
+            CurrentOrders = Orders.MOVE;
+            Unload(agent, closestStorage);
+        }
+    }
+
+    void AutoIssue()
+    {
+        if (CurrentCarryingAmt <= MaxCarryingAmt && CurrentOrders == Orders.UNLOAD)
         {
             GameObject[] facs = GameObject.FindGameObjectsWithTag("Storage");
             var closestStorage = FindClosestStorage(agent, facs);
@@ -247,4 +187,3 @@ public class WorkerOrders : BaseUnitOrders
         return returnedObj;
     }
 }
->>>>>>> 8d5a58b66c24918062554515ba248bf63a6dddc8

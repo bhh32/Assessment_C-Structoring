@@ -7,7 +7,7 @@ public class BaseResource : MonoBehaviour
 {
     [SerializeField] protected float maxAmt;
     [SerializeField] protected float harvestAmt;
-    ScriptableInstCreator listOfResources;
+    //ScriptableInstCreator listOfResources;
 
     public float MaxAmt{ get { return maxAmt; } }
     List<GameObject> workers;
@@ -25,6 +25,7 @@ public class BaseResource : MonoBehaviour
     void Start()
     {
         //listOfResources.resourceLists.OnAddResource(gameObject);
+        
     }
 
     void OnTriggerEnter(Collider other)
@@ -33,21 +34,31 @@ public class BaseResource : MonoBehaviour
 
         if (other.CompareTag("Worker"))
         {
-            orders = other.gameObject.GetComponent<WorkerOrders>();            
-        
+            orders = other.gameObject.GetComponent<WorkerOrders>();
+
             // Redundant, but ensures that if worker walks over mine and is chopping
             // wood it doesn't start mining instead, and vice versa.
-            if (MaxAmt > 0 && gameObject.CompareTag("Minable") 
+            if (MaxAmt > 0 && gameObject.CompareTag("Minable")
                 && orders.CurrentOrders == BaseUnitOrders.Orders.TAKE)
             {
-                OnResourceHarvested();
-                workers.Add(other.gameObject);
+                if (orders.PreviousResource.CompareTag("Choppable") ||
+                    orders.PreviousResource == gameObject ||
+                    orders.PreviousResource == null)
+                {
+                    workers.Add(other.gameObject);
+                    OnResourceHarvested();
+                }
             }
-            else if(MaxAmt > 0 && gameObject.CompareTag("Choppable") 
+            else if (MaxAmt > 0 && gameObject.CompareTag("Choppable")
                 && orders.CurrentOrders == BaseUnitOrders.Orders.TAKE)
             {
-                OnResourceHarvested();
-                workers.Add(other.gameObject);
+                if (orders.PreviousResource.CompareTag("Minable") || 
+                    orders.PreviousResource == gameObject ||
+                    orders.PreviousResource == null)
+                {
+                    workers.Add(other.gameObject);
+                    OnResourceHarvested();
+                }
             }
         }
     }
@@ -55,7 +66,11 @@ public class BaseResource : MonoBehaviour
     void OnTriggerExit(Collider other)
     {
         if (workers.Contains(other.gameObject))
+        {
+            StopCoroutine("Harvesting");
             workers.Remove(other.gameObject);
+
+        }
     }
 
     public void Harvest()

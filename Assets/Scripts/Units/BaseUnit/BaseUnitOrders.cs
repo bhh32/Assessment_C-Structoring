@@ -6,7 +6,7 @@ using UnityEngine.AI;
 public class BaseUnitOrders : MonoBehaviour, UnitOrders
 {
     // Keeps track of the previous resource visited
-    GameObject previousResource = null;
+    protected GameObject previousResource = null;
     [SerializeField] float stoppingDistance;
 
     public void Move(NavMeshAgent agent)
@@ -73,6 +73,9 @@ public class BaseUnitOrders : MonoBehaviour, UnitOrders
     // Sends the player to the selected mine/previous mine
     public void TakeResource(NavMeshAgent agent, GameObject resource)
     {
+        if (agent.destination != resource.transform.position)
+            agent.SetDestination(resource.transform.position);
+
         float dist = Vector3.Distance(agent.transform.position, resource.transform.position);
         var takeOrder = agent.GetComponent<WorkerOrders>();
 
@@ -195,18 +198,20 @@ public class BaseUnitOrders : MonoBehaviour, UnitOrders
             {
                 // Set the previous resource visited
                 previousResource = FindClosestResource(previousResource, resource);
-                float dist2 = Vector3.Distance(agent.transform.position, previousResource.transform.position);
-                if (previousResource.CompareTag("Mining"))
+                if (previousResource != null)
                 {
-                    if (dist2 < 15f)
+                    float dist2 = Vector3.Distance(agent.transform.position, previousResource.transform.position);
+                    if (previousResource.CompareTag("Minable"))
+                    {
+                        if (dist2 < 15f)
+                            TakeResource(agent, previousResource);
+                        else
+                            agent.GetComponent<WorkerOrders>().CurrentOrders = Orders.MOVE;
+                    }
+                    else if (previousResource.CompareTag("Choppable"))
+                    {
                         TakeResource(agent, previousResource);
-                    else
-                        agent.GetComponent<WorkerOrders>().CurrentOrders = Orders.MOVE;
-                }
-                else if (previousResource.CompareTag("Choppable"))
-                {
-                    if (previousResource != null)
-                        TakeResource(agent, previousResource);
+                    }
                 }
             }
         }
