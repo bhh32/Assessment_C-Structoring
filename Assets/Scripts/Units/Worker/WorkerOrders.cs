@@ -8,22 +8,38 @@ public class WorkerOrders : BaseUnitOrders
 {
     UnitProperties properties;
     OrderSelection orderSelection;
-    AutoHarvest harvestOrder;
+
+    [SerializeField] float debugCurrentCarrying;
+
+    public GameObject thisWorkersPreviousResource;
+
     public GameObject PreviousResource
     { get { return previousResource; } }
 
-    public float MaxCarryingAmt
+    public float MaxGoldCarryingAmt
+    { get { return properties.maxGoldCarryingAmt; } }
+
+    public float CurrentGoldCarryingAmt
     {
-        get { return properties.maxCarryingAmt; }
+        get { return properties.currentGoldCarryingAmt; }
+
+        set
+        {
+            properties.currentGoldCarryingAmt = value;
+        }
     }
 
-    public float CurrentCarryingAmt
+    public float MaxWoodCarryingAmt
     {
-        get { return properties.currentCarryingAmt; }
+        get { return properties.maxWoodCarryingAmt; }
+    }
+
+    public float CurrentWoodCarryingAmt
+    {
+        get { return properties.currentWoodCarryingAmt; }
         set 
         { 
-            properties.currentCarryingAmt = value;
-            Debug.Log(properties.currentCarryingAmt);
+            properties.currentWoodCarryingAmt = value;
         }
     }
 
@@ -52,10 +68,13 @@ public class WorkerOrders : BaseUnitOrders
     void Awake()
     {
         orderSelection = GameObject.Find("HUD Manager").GetComponent<OrderSelection>();
+        thisWorkersPreviousResource = null;
         CurrentOrders = Orders.EMPTY;
         properties.isSelected = false;
-        properties.maxCarryingAmt = 5f;
-        properties.currentCarryingAmt = 0f;
+        properties.maxGoldCarryingAmt = 5f;
+        properties.currentGoldCarryingAmt = 0f;
+        properties.maxWoodCarryingAmt = 5f;
+        properties.currentWoodCarryingAmt = 0f;
         properties.armor = 0f;
         base.StartingMove(agent);
     }
@@ -118,7 +137,7 @@ public class WorkerOrders : BaseUnitOrders
                     else
                         CurrentOrders = Orders.MOVE;
                 }
-                else if (CurrentCarryingAmt <= MaxCarryingAmt && CurrentOrders == Orders.UNLOAD)
+                else if (CurrentOrders == Orders.UNLOAD && CurrentGoldCarryingAmt > 0f || CurrentWoodCarryingAmt > 0f)
                 {
                     GameObject[] facs = GameObject.FindGameObjectsWithTag("Storage");
                     var closestStorage = FindClosestStorage(agent, facs);
@@ -153,24 +172,33 @@ public class WorkerOrders : BaseUnitOrders
                 break;
         }
 
-        if (CurrentCarryingAmt <= MaxCarryingAmt && CurrentOrders == Orders.UNLOAD)
-        {
-            GameObject[] facs = GameObject.FindGameObjectsWithTag("Storage");
-            var closestStorage = FindClosestStorage(agent, facs);
-            CurrentOrders = Orders.MOVE;
-            Unload(agent, closestStorage);
-        }
+        AutoIssue();
     }
 
     void AutoIssue()
     {
-        if (CurrentCarryingAmt <= MaxCarryingAmt && CurrentOrders == Orders.UNLOAD)
+        if (thisWorkersPreviousResource != null)
         {
-            GameObject[] facs = GameObject.FindGameObjectsWithTag("Storage");
-            var closestStorage = FindClosestStorage(agent, facs);
-            CurrentOrders = Orders.MOVE;
-            Unload(agent, closestStorage);
+            if (thisWorkersPreviousResource.CompareTag("Minable"))
+            {
+                if (CurrentGoldCarryingAmt <= MaxGoldCarryingAmt && CurrentOrders == Orders.UNLOAD)
+                {
+                    FindLocalStorage();
+                }
+            }
+            else if (thisWorkersPreviousResource.CompareTag("Choppable"))
+            {
+                FindLocalStorage();
+            }
         }
+    }
+
+    void FindLocalStorage()
+    {
+        GameObject[] facs = GameObject.FindGameObjectsWithTag("Storage");
+        var closestStorage = FindClosestStorage(agent, facs);
+        CurrentOrders = Orders.MOVE;
+        Unload(agent, closestStorage);
     }
 
     GameObject TypeOfObj()

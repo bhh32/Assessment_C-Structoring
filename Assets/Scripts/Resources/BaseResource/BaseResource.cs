@@ -41,9 +41,11 @@ public class BaseResource : MonoBehaviour
             if (MaxAmt > 0 && gameObject.CompareTag("Minable")
                 && orders.CurrentOrders == BaseUnitOrders.Orders.TAKE)
             {
-                if (orders.PreviousResource.CompareTag("Choppable") ||
-                    orders.PreviousResource == gameObject ||
-                    orders.PreviousResource == null)
+                orders.thisWorkersPreviousResource = gameObject;
+
+                if (orders.thisWorkersPreviousResource.CompareTag("Choppable") ||
+                    orders.thisWorkersPreviousResource == gameObject ||
+                    orders.thisWorkersPreviousResource == null)
                 {
                     workers.Add(other.gameObject);
                     OnResourceHarvested();
@@ -52,9 +54,9 @@ public class BaseResource : MonoBehaviour
             else if (MaxAmt > 0 && gameObject.CompareTag("Choppable")
                 && orders.CurrentOrders == BaseUnitOrders.Orders.TAKE)
             {
-                if (orders.PreviousResource.CompareTag("Minable") || 
-                    orders.PreviousResource == gameObject ||
-                    orders.PreviousResource == null)
+                if (orders.thisWorkersPreviousResource == null ||
+                    orders.thisWorkersPreviousResource.CompareTag("Minable") || 
+                    orders.thisWorkersPreviousResource == gameObject)
                 {
                     workers.Add(other.gameObject);
                     OnResourceHarvested();
@@ -86,10 +88,19 @@ public class BaseResource : MonoBehaviour
         while (harvested < amt && MaxAmt > 0f)
         {   
             foreach (GameObject worker in workers)
-            {   
-                harvested++;
+            {
+                
                 var order = worker.GetComponent<WorkerOrders>();
-                order.CurrentCarryingAmt = harvested;
+                if (order.thisWorkersPreviousResource.CompareTag("Minable"))
+                {
+                    harvested++;
+                    order.CurrentGoldCarryingAmt = harvested;
+                }
+                else if(order.thisWorkersPreviousResource.CompareTag("Choppable"))
+                {
+                    harvested++;
+                    order.CurrentWoodCarryingAmt = harvested;
+                }
             }
 
             if (harvested > maxAmt)
@@ -109,22 +120,31 @@ public class BaseResource : MonoBehaviour
         foreach (GameObject worker in workers)
         {
             var orders = worker.GetComponent<WorkerOrders>();
-            if (orders.CurrentCarryingAmt <= orders.MaxCarryingAmt || MaxAmt == 0f)
+            if(orders.thisWorkersPreviousResource.CompareTag("Minable") || MaxAmt == 0f)
             {
-                orders.CurrentOrders = BaseUnitOrders.Orders.UNLOAD;
-
-                if (MaxAmt == 0f)
+                if (orders.CurrentGoldCarryingAmt <= orders.MaxGoldCarryingAmt || MaxAmt == 0f)
                 {
-                    GameObject[] storage = GameObject.FindGameObjectsWithTag("Storage");
-
-                    GameObject closestStorage = orders.FindClosestStorage(worker.GetComponent<NavMeshAgent>(), storage);
-
-                    worker.GetComponent<NavMeshAgent>().SetDestination(closestStorage.transform.position);
                     orders.CurrentOrders = BaseUnitOrders.Orders.UNLOAD;
-                    //listOfResources.resourceLists.OnRemoveResource(gameObject);
-                    gameObject.SetActive(false);
+
+                    if (MaxAmt == 0f)
+                    {
+                        GameObject[] storage = GameObject.FindGameObjectsWithTag("Storage");
+
+                        GameObject closestStorage = orders.FindClosestStorage(worker.GetComponent<NavMeshAgent>(), storage);
+
+                        worker.GetComponent<NavMeshAgent>().SetDestination(closestStorage.transform.position);
+                        orders.CurrentOrders = BaseUnitOrders.Orders.UNLOAD;
+                        //listOfResources.resourceLists.OnRemoveResource(gameObject);
+                        gameObject.SetActive(false);
+                    }
+                }               
+            }
+            else if(orders.thisWorkersPreviousResource.CompareTag("Choppable"))
+            {
+                if(orders.CurrentWoodCarryingAmt <= orders.MaxWoodCarryingAmt)
+                {
+                    orders.CurrentOrders = BaseUnitOrders.Orders.UNLOAD;
                 }
-                
             }
         }
     }

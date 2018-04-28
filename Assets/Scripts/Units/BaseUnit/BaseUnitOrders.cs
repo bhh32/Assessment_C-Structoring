@@ -73,6 +73,7 @@ public class BaseUnitOrders : MonoBehaviour, UnitOrders
     // Sends the player to the selected mine/previous mine
     public void TakeResource(NavMeshAgent agent, GameObject resource)
     {
+        previousResource = resource;
         if (agent.destination != resource.transform.position)
             agent.SetDestination(resource.transform.position);
 
@@ -81,7 +82,8 @@ public class BaseUnitOrders : MonoBehaviour, UnitOrders
 
         var resourceProperties = resource.GetComponent<BaseResource>();
 
-        if (takeOrder.CurrentCarryingAmt < takeOrder.MaxCarryingAmt)
+        if (takeOrder.CurrentWoodCarryingAmt < takeOrder.MaxWoodCarryingAmt
+            || takeOrder.CurrentGoldCarryingAmt < takeOrder.MaxGoldCarryingAmt)
         {
             if (dist > .5f)
             {
@@ -176,10 +178,10 @@ public class BaseUnitOrders : MonoBehaviour, UnitOrders
                     break;
             }
        
-            // Ensure the order is TAKE
+            // Ensure the order is UNLOAD
             WorkerOrders orders = agent.GetComponent<WorkerOrders>();
-            if (orders.CurrentOrders != Orders.TAKE)
-                orders.CurrentOrders = Orders.TAKE;
+            if (orders.CurrentOrders != Orders.UNLOAD)
+                orders.CurrentOrders = Orders.UNLOAD;
 
             while (dist > 1.25f)
             {
@@ -187,11 +189,9 @@ public class BaseUnitOrders : MonoBehaviour, UnitOrders
                 yield return null;
             }
 
-            //TODO: NEW COROUTINE TO UNLOAD OVER TIME
-            agent.GetComponent<WorkerOrders>().CurrentCarryingAmt = 0f;
-
             if (previousResource.GetComponent<BaseResource>().MaxAmt > 0f)
-            {               
+            {
+                orders.CurrentOrders = Orders.TAKE;
                 TakeResource(agent, previousResource);
             }
             else
@@ -201,6 +201,7 @@ public class BaseUnitOrders : MonoBehaviour, UnitOrders
                 if (previousResource != null)
                 {
                     float dist2 = Vector3.Distance(agent.transform.position, previousResource.transform.position);
+                    orders.CurrentOrders = Orders.TAKE;
                     if (previousResource.CompareTag("Minable"))
                     {
                         if (dist2 < 15f)

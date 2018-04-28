@@ -1,7 +1,8 @@
-﻿using UnityEngine;
+﻿using System.Collections.Generic;
+using UnityEngine;
 using UnityEngine.AI;
 
-class Storage : MonoBehaviour
+public class Storage : MonoBehaviour
 {
     // Properties used because I wanted to update the UI
     [SerializeField] float goldStorageMax;
@@ -21,13 +22,9 @@ class Storage : MonoBehaviour
     }
 
     [SerializeField] float woodStorageMax;
-    private float WoodStorageMax
+    public float WoodStorageMax
     {
         get { return woodStorageMax; }
-        set
-        {
-            woodStorageMax = value;
-        }
     }
 
     [SerializeField] float woodStorageCurrent;
@@ -40,52 +37,70 @@ class Storage : MonoBehaviour
         }
     }
 
+    UIManager updateUI;
+    List<GameObject> workers;
+
+    private void Start()
+    {
+        workers = new List<GameObject>();
+        CurrentWood = 0f;
+        CurrentGold = 0f;
+        var tempObj = GameObject.Find("HUD Manager");
+        updateUI = tempObj.GetComponent<UIManager>();
+    }
+
     void OnTriggerEnter(Collider other)
     {
         if (other.CompareTag("Worker"))
         {
-            var orders = other.GetComponent<WorkerOrders>();
-            if (orders.CurrentCarryingAmt <= orders.MaxCarryingAmt && 
-                orders.CurrentCarryingAmt > 0f && orders.CurrentOrders == BaseUnitOrders.Orders.UNLOAD)
+            if (!workers.Contains(other.gameObject))
             {
-                switch(orders.PreviousResource.tag)
+                workers.Add(other.gameObject);
+            }
+
+            foreach (GameObject obj in workers)
+            {
+                var orders = obj.GetComponent<WorkerOrders>();
+                if (orders.CurrentWoodCarryingAmt > 0f || orders.CurrentGoldCarryingAmt > 0f 
+                    && orders.CurrentOrders == BaseUnitOrders.Orders.UNLOAD)
                 {
-                    case "Minable":
-                        if (CurrentGold < GoldStorageMax)
-                        {
-                            CurrentGold = orders.CurrentCarryingAmt;
+                    switch (orders.PreviousResource.tag)
+                    {
+                        case "Minable":
+                            if (CurrentGold < GoldStorageMax)
+                            {
+                                CurrentGold += orders.CurrentGoldCarryingAmt;
+                                if (CurrentGold > GoldStorageMax)
+                                    CurrentGold = GoldStorageMax;
 
-                            orders.CurrentCarryingAmt = 0f;
-                            if (CurrentGold > GoldStorageMax)
-                                CurrentGold = GoldStorageMax;
+                                orders.CurrentGoldCarryingAmt = 0f;
+                                orders.CurrentOrders = BaseUnitOrders.Orders.TAKE;
+                                orders.TakeResource(orders.GetComponent<NavMeshAgent>(), orders.PreviousResource);
+                            }
+                            else
+                            {
+                                FindOtherFacility(orders);
+                            }
+                            break;
 
-                            orders.CurrentOrders = BaseUnitOrders.Orders.TAKE;
-                            orders.TakeResource(orders.GetComponent<NavMeshAgent>(), orders.PreviousResource);
-                        }
-                        else
-                        {
-                            FindOtherFacility(orders);
-                        }
+                        case "Choppable":
+                            if (CurrentWood < WoodStorageMax)
+                            {
+                                CurrentWood += orders.CurrentWoodCarryingAmt;
+                                if (CurrentWood > WoodStorageMax)
+                                    CurrentWood = WoodStorageMax;
 
-                        
-                        break;
-                    case "Choppable":
-                        if (CurrentWood < WoodStorageMax)
-                        {
-                            CurrentWood = orders.CurrentCarryingAmt;
-
-                            orders.CurrentCarryingAmt = 0f;
-                            if (CurrentWood > WoodStorageMax)
-                                CurrentWood = WoodStorageMax;
-
-                            orders.CurrentOrders = BaseUnitOrders.Orders.TAKE;
-                            orders.TakeResource(orders.GetComponent<NavMeshAgent>(), orders.PreviousResource);
-                        }
-                        else
-                        {
-                            FindOtherFacility(orders);
-                        }
-                        break;
+                                orders.CurrentWoodCarryingAmt = 0f;
+                                orders.CurrentOrders = BaseUnitOrders.Orders.TAKE;
+                                orders.TakeResource(orders.GetComponent<NavMeshAgent>(), orders.PreviousResource);
+                            }
+                            else
+                            {
+                                FindOtherFacility(orders);
+                            }
+                            break;
+                    }                    
+                    updateUI.OnResourceUpdate();
                 }
             }
         }

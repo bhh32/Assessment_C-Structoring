@@ -141,6 +141,9 @@ GameObject:
   m_Component:
   - component: {fileID: 4000012586168786}
   - component: {fileID: 208816622588105004}
+  - component: {fileID: 114641144940867032}
+  - component: {fileID: 65044586326625850}
+  - component: {fileID: 54987118450606214}
   m_Layer: 0
   m_Name: RTSBK_Storage
   m_TagString: Storage
@@ -618,6 +621,21 @@ MeshFilter:
   m_PrefabInternal: {fileID: 100100000}
   m_GameObject: {fileID: 1000011664532672}
   m_Mesh: {fileID: 4300000, guid: 3744889b2f1a54115b668e9422766126, type: 3}
+--- !u!54 &54987118450606214
+Rigidbody:
+  m_ObjectHideFlags: 1
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1000013765657912}
+  serializedVersion: 2
+  m_Mass: 1
+  m_Drag: 0
+  m_AngularDrag: 0.05
+  m_UseGravity: 0
+  m_IsKinematic: 1
+  m_Interpolate: 0
+  m_Constraints: 0
+  m_CollisionDetection: 0
 --- !u!65 &65000011556806284
 BoxCollider:
   m_ObjectHideFlags: 1
@@ -630,6 +648,33 @@ BoxCollider:
   serializedVersion: 2
   m_Size: {x: 2, y: 0.019999966, z: 2}
   m_Center: {x: 0, y: 0.009999983, z: 0}
+--- !u!65 &65044586326625850
+BoxCollider:
+  m_ObjectHideFlags: 1
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1000013765657912}
+  m_Material: {fileID: 0}
+  m_IsTrigger: 1
+  m_Enabled: 1
+  serializedVersion: 2
+  m_Size: {x: 2.2248974, y: 1, z: 2.2085652}
+  m_Center: {x: -0.008166075, y: 0, z: -0.032663584}
+--- !u!114 &114641144940867032
+MonoBehaviour:
+  m_ObjectHideFlags: 1
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1000013765657912}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dce0a161052394e4d96d617e052a2214, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  goldStorageMax: 500
+  goldStorageCurrent: 0
+  woodStorageMax: 500
+  woodStorageCurrent: 0
 --- !u!205 &205000011679864466
 LODGroup:
   m_ObjectHideFlags: 1
