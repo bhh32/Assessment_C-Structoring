@@ -98,6 +98,7 @@ public class BaseUnitOrders : MonoBehaviour, UnitOrders
     {
         float dist = Vector3.Distance(agent.transform.position, storageFac.transform.position);
         agent.SetDestination(storageFac.transform.position);
+        Debug.Log("Started Couritine");
         StartCoroutine(StorageMove(dist, agent, storageFac));
     }
 
@@ -216,6 +217,7 @@ public class BaseUnitOrders : MonoBehaviour, UnitOrders
                 }
             }
         }
+        Debug.Log("Stopped Couritine");
     }
 
     public enum Orders

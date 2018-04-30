@@ -12,6 +12,7 @@ public class WorkerOrders : BaseUnitOrders
     [SerializeField] float debugCurrentCarrying;
 
     public GameObject thisWorkersPreviousResource;
+    bool orderIssued;
 
     public GameObject PreviousResource
     { get { return previousResource; } }
@@ -86,7 +87,10 @@ public class WorkerOrders : BaseUnitOrders
         {
             if (!orderSelection.selectedUnits.Contains(gameObject))
                 orderSelection.SelectedUnits = gameObject;
-    
+            if(CurrentGoldCarryingAmt > 0f || CurrentWoodCarryingAmt > 0f && thisWorkersPreviousResource == null)
+                thisWorkersPreviousResource = previousResource;
+                
+
             selectedObj = TypeOfObj();
 
 
@@ -172,11 +176,14 @@ public class WorkerOrders : BaseUnitOrders
                 break;
         }
 
+        if(!orderIssued)
         AutoIssue();
     }
 
     void AutoIssue()
     {
+        orderIssued = true;
+
         if (thisWorkersPreviousResource != null)
         {
             if (thisWorkersPreviousResource.CompareTag("Minable"))
@@ -199,6 +206,7 @@ public class WorkerOrders : BaseUnitOrders
         var closestStorage = FindClosestStorage(agent, facs);
         CurrentOrders = Orders.MOVE;
         Unload(agent, closestStorage);
+        orderIssued = false;
     }
 
     GameObject TypeOfObj()
