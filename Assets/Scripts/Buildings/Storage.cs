@@ -1,104 +1,80 @@
-﻿using UnityEngine;
-using UnityEngine.AI;
+﻿using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
 
-class Storage : MonoBehaviour
+public class Storage : MonoBehaviour 
 {
-    // Properties used because I wanted to update the UI
-    [SerializeField] float goldStorageMax;
-    public float GoldStorageMax
-    {
-        get { return goldStorageMax; }
-    }
-
-    [SerializeField] float goldStorageCurrent;
-    public float CurrentGold
-    {
-        get { return goldStorageCurrent; }
-        private set
-        {
-            goldStorageCurrent = value;
-        }
-    }
-
-    [SerializeField] float woodStorageMax;
-    private float WoodStorageMax
-    {
-        get { return woodStorageMax; }
-        set
-        {
-            woodStorageMax = value;
-        }
-    }
-
-    [SerializeField] float woodStorageCurrent;
-    public float CurrentWood
-    {
-        get { return woodStorageCurrent; }
-        private set
-        {
-            woodStorageCurrent = value;
-        }
-    }
+    public float maxWoodCapacity;
+    public float currentWoodCapacity;
+    public float maxGoldCapacity;
+    public float currentGoldCapacity;
 
     void OnTriggerEnter(Collider other)
     {
         if (other.CompareTag("Worker"))
         {
-            var orders = other.GetComponent<WorkerOrders>();
-            if (orders.CurrentCarryingAmt <= orders.MaxCarryingAmt && 
-                orders.CurrentCarryingAmt > 0f && orders.CurrentOrders == BaseUnitOrders.Orders.UNLOAD)
+            var worker = other.GetComponent<Worker>();
+
+            worker.destSet = false;
+
+            if (worker.currentOrders == Worker.Orders.UNLOAD && worker.carryinAmt > 0f)
             {
-                switch(orders.PreviousResource.tag)
+                if (worker.currentResource.CompareTag("Choppable"))
                 {
-                    case "Minable":
-                        if (CurrentGold < GoldStorageMax)
-                        {
-                            CurrentGold = orders.CurrentCarryingAmt;
-
-                            orders.CurrentCarryingAmt = 0f;
-                            if (CurrentGold > GoldStorageMax)
-                                CurrentGold = GoldStorageMax;
-
-                            orders.CurrentOrders = BaseUnitOrders.Orders.TAKE;
-                            orders.TakeResource(orders.GetComponent<NavMeshAgent>(), orders.PreviousResource);
-                        }
-                        else
-                        {
-                            FindOtherFacility(orders);
-                        }
-
-                        
-                        break;
-                    case "Choppable":
-                        if (CurrentWood < WoodStorageMax)
-                        {
-                            CurrentWood = orders.CurrentCarryingAmt;
-
-                            orders.CurrentCarryingAmt = 0f;
-                            if (CurrentWood > WoodStorageMax)
-                                CurrentWood = WoodStorageMax;
-
-                            orders.CurrentOrders = BaseUnitOrders.Orders.TAKE;
-                            orders.TakeResource(orders.GetComponent<NavMeshAgent>(), orders.PreviousResource);
-                        }
-                        else
-                        {
-                            FindOtherFacility(orders);
-                        }
-                        break;
+                    currentWoodCapacity += worker.carryinAmt;
+                    worker.currentOrders = Worker.Orders.CHOP;
                 }
+                else if (worker.currentResource.CompareTag("Minable"))
+                {
+                    currentGoldCapacity += worker.carryinAmt;
+                    worker.currentOrders = Worker.Orders.MINE;
+                }
+
+                worker.carryinAmt = 0f;
+
+                if (worker.currentResource.GetComponent<Resources>().maxCapacity > 0f)
+                {
+                    worker.OnDestChange(worker.currentResource.transform.position);
+                }
+                else
+                {
+                    GameObject newResource = FindClosestResource(worker.currentResource);
+
+                    if (Vector3.Distance(worker.transform.position, newResource.transform.position) < 10f)
+                        worker.OnDestChange(newResource.transform.position);
+                    else
+                        worker.currentOrders = Worker.Orders.IDLE;
+                }
+            }
+            else
+            {
+                worker.currentOrders = Worker.Orders.IDLE;
             }
         }
     }
 
-    void FindOtherFacility(WorkerOrders worker)
+    GameObject FindClosestResource(GameObject resource)
     {
-        GameObject[] otherFacilities = GameObject.FindGameObjectsWithTag("Storage");
-        var newFac = worker.FindClosestStorage(worker.GetComponent<NavMeshAgent>(), otherFacilities);
+        GameObject[] resources = null;
 
-        if (newFac != null)
-            worker.Unload(worker.GetComponent<NavMeshAgent>(), newFac);
-        else
-            worker.StartingMove(worker.GetComponent<NavMeshAgent>());
+        if (resource.CompareTag("Choppable"))
+            resources = GameObject.FindGameObjectsWithTag("Choppable");
+        else if (resource.CompareTag("Minable"))
+            resources = GameObject.FindGameObjectsWithTag("Minable");
+        
+        GameObject closestFac = null;
+        float dist = 1000f;
+
+        foreach (GameObject facs in resources)
+        {
+            float tempDist = Vector3.Distance(gameObject.transform.position, gameObject.transform.position);
+            if (tempDist < dist)
+            {
+                closestFac = facs;
+                dist = tempDist;
+            }
+        }
+
+        return closestFac;
     }
 }
