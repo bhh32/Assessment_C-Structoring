@@ -17,10 +17,16 @@ public class Worker : MonoBehaviour
     };
         
     public Orders currentOrders; // The worker's current orders
+    public bool hasOrders;
     public bool isSelected = false; // Sets whether the worker is selected or not
+    public bool IsSelected
+    { get { return isSelected; }
+      set { isSelected = value; }
+    }
     [SerializeField] NavMeshAgent agent; // The workers NavMeshAgent
     Vector3 clickPoint; // The point on the screen that the player clicked
     public GameObject currentResource; // The resource the worker is set to currently harvest
+    public GameObject previousResource;
     public float carryingCapacity; // The worker's max carrying capacity
     public float carryinAmt; // The worker's current carrying amount
     public bool destSet; // True if a destination is set, false if it's not
@@ -28,6 +34,9 @@ public class Worker : MonoBehaviour
 	// Use this for initialization
 	void Start () 
     {
+        currentOrders = Orders.IDLE;
+        hasOrders = false;
+
         // Subscribe to the delegate
         OnDestChange += ChangeDest;	
 	}
@@ -35,6 +44,9 @@ public class Worker : MonoBehaviour
 	// Update is called once per frame
 	void Update () 
     {
+        if (Input.GetKeyUp(KeyCode.Escape))
+            isSelected = false;
+
         // Get if the left mouse button is clicked
         bool isLeftClicked = Input.GetMouseButtonUp(0);
 
@@ -43,7 +55,7 @@ public class Worker : MonoBehaviour
             SetClickPoint();
 
         // If the worker is selected issue orders
-        if (isSelected)
+        if (isSelected && !hasOrders)
             IssueOrders();
 	}
 
@@ -53,19 +65,34 @@ public class Worker : MonoBehaviour
         switch (currentOrders)
         {
             case Orders.WALK:
-                if(!destSet) // if a destination isn't set walk
-                    Walk();
+                hasOrders = false;
+                destSet = false;
+                agent.SetDestination(clickPoint);
                 break;
             case Orders.CHOP:
             case Orders.MINE:
-                if(!destSet) // if a destination isn't set walk to the resource
-                    Walk();
+                hasOrders = true;
+                if (!destSet) // if a destination isn't set walk to the resource
+                    ChangeDest(clickPoint);
                 break;
             case Orders.UNLOAD:
+                if (!destSet && carryinAmt > 0f)
+                {
+                    hasOrders = true;
+                    ChangeDest(clickPoint);
+                }
+                else
+                {
+                    hasOrders = false;
+                    currentOrders = Orders.IDLE;
+                }
+                break;
             case Orders.BUILD:
-                Walk(); // Walk to the building foundation
+                hasOrders = true;
+                ChangeDest(clickPoint); // Walk to the building foundation
                 break;
             case Orders.IDLE: // Idle is to do nothing
+                hasOrders = false;
                 break;
             case Orders.ERROR:
                 Debug.LogError("There Was An Error In The IssueOrders Method!");
@@ -88,26 +115,41 @@ public class Worker : MonoBehaviour
             switch (layerHit)
             {
                 case 8:
-                    currentOrders = Orders.WALK;
+                    if (isSelected)
+                    {
+                        hasOrders = false;
+                        currentOrders = Orders.WALK;
+                    }
                     break;
                 case 9:
-                    currentOrders = Orders.CHOP;
-                    currentResource = hit.collider.gameObject;
+                    if (isSelected)
+                    {
+                        currentOrders = Orders.CHOP;
+                        currentResource = hit.collider.gameObject;
+                    }
                     break;
                 case 10:
-                    currentOrders = Orders.MINE;
-                    currentResource = hit.collider.gameObject;
+                    if (isSelected)
+                    {
+                        currentOrders = Orders.MINE;
+                        currentResource = hit.collider.gameObject;
+                    }
                     break;
                 case 11:
-                    currentOrders = Orders.BUILD;
+                    if (isSelected)
+                        currentOrders = Orders.BUILD;
                     break;
                 case 12:
-                    currentOrders = Orders.UNLOAD;
+                    if(isSelected && carryinAmt > 0f)
+                        currentOrders = Orders.UNLOAD;
                     break;
                 case 13:
-                    currentOrders = Orders.IDLE;
                     if (hit.collider.gameObject == gameObject)
+                    {
                         isSelected = true;
+                        hasOrders = false;
+                        destSet = false;
+                    }
                     else
                         isSelected = false;
                     break;
@@ -122,26 +164,11 @@ public class Worker : MonoBehaviour
         }
     }
 
-    void Walk()
-    {
-        destSet = true;
-        agent.SetDestination(clickPoint);        
-    }
-
+    // Changes the destination of the worker
     void ChangeDest(Vector3 destination)
     {
         destSet = true;
-
-        // This allows the worker to move between the resource and storage if it's selected
-        if (isSelected)
-        {            
-            clickPoint = destination;
-            agent.SetDestination(clickPoint);
-        }
-        // This allows the worker to move between the resource and storage if it isn't selected
-        else
-        {
-            agent.SetDestination(destination);
-        }
+        hasOrders = true;
+        agent.SetDestination(destination);
     }
 }

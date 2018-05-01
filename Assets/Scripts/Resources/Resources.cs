@@ -1,6 +1,4 @@
-﻿using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
+﻿using UnityEngine;
 
 public class Resources : MonoBehaviour 
 {
@@ -20,28 +18,30 @@ public class Resources : MonoBehaviour
             if (worker.currentResource == gameObject && worker.currentOrders == Worker.Orders.CHOP 
                 || worker.currentOrders == Worker.Orders.MINE)
             {
+                if(worker.previousResource == null || worker.previousResource != gameObject)
+                    worker.previousResource = gameObject;
                 /** Check to make sure the worker's carrying capacity is less than
-                    the max capacity of the resource **/
-                    if (worker.carryingCapacity < maxCapacity)
-                    {
-                        maxCapacity -= worker.carryingCapacity; // Take away from the max capacity
-                        worker.carryinAmt = worker.carryingCapacity; // set the yield to the capacity
+                the max capacity of the resource **/
+                if (worker.carryingCapacity < maxCapacity)
+                {
+                    maxCapacity -= worker.carryingCapacity; // Take away from the max capacity
+                    worker.carryinAmt = worker.carryingCapacity; // set the yield to the capacity
 
-                        worker.currentOrders = Worker.Orders.UNLOAD;
-                        worker.OnDestChange(FindClosestStorageFac().transform.position);                        
-                    }
-                    /** Otherwise, we set the yield to the maxCapacity,
-                        change the orders to UNLOAD, send the worker to the nearest
-                        storage facility, and set this gameObject to inactive **/
-                    else
-                    {
-                        worker.carryinAmt = maxCapacity;
-
-                        worker.currentOrders = Worker.Orders.UNLOAD;
-                        worker.OnDestChange(FindClosestStorageFac().transform.position);
-                    worker.currentResource = FindClosestResource(gameObject);
-                        gameObject.SetActive(false);
-                    }
+                    worker.currentOrders = Worker.Orders.UNLOAD;
+                    worker.OnDestChange(FindClosestStorageFac().transform.position);                        
+                }
+                /** Otherwise, we set the yield to the maxCapacity,
+                    change the orders to UNLOAD, send the worker to the nearest
+                    storage facility, and set this gameObject to inactive **/
+                else
+                {
+                    worker.carryinAmt = maxCapacity;
+                    worker.currentOrders = Worker.Orders.UNLOAD;
+                    worker.OnDestChange(FindClosestStorageFac().transform.position);
+                        
+                   worker.currentResource = FindClosestResource(gameObject);
+                   gameObject.SetActive(false);
+                }
 
 
             }

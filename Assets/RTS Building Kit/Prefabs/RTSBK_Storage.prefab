@@ -23,7 +23,7 @@ GameObject:
   - component: {fileID: 23000010166171758}
   - component: {fileID: 65000011556806284}
   - component: {fileID: 205000011679864466}
-  m_Layer: 0
+  m_Layer: 12
   m_Name: RTSBK_Foundation_01
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -40,7 +40,7 @@ GameObject:
   - component: {fileID: 4000010634670522}
   - component: {fileID: 33000014152911670}
   - component: {fileID: 23000012172812374}
-  m_Layer: 0
+  m_Layer: 12
   m_Name: RTSBK_Tree
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -57,7 +57,7 @@ GameObject:
   - component: {fileID: 4000010940094942}
   - component: {fileID: 33000012908482676}
   - component: {fileID: 23000010969086540}
-  m_Layer: 0
+  m_Layer: 12
   m_Name: RTSBK_Foundation_01.LOD
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -74,7 +74,7 @@ GameObject:
   - component: {fileID: 4000011093497274}
   - component: {fileID: 33000013230642276}
   - component: {fileID: 23000011614267008}
-  m_Layer: 0
+  m_Layer: 12
   m_Name: RTSBK_Storage
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -91,7 +91,7 @@ GameObject:
   - component: {fileID: 4000011120525886}
   - component: {fileID: 33000013094194092}
   - component: {fileID: 23000014075703814}
-  m_Layer: 0
+  m_Layer: 12
   m_Name: RTSBK_Tree (1)
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -108,7 +108,7 @@ GameObject:
   - component: {fileID: 4000011507587772}
   - component: {fileID: 33000012965104104}
   - component: {fileID: 23000011173608766}
-  m_Layer: 0
+  m_Layer: 12
   m_Name: RTSBK_Concrete
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -125,7 +125,7 @@ GameObject:
   - component: {fileID: 4000012270395376}
   - component: {fileID: 33000013985819504}
   - component: {fileID: 23000010776895538}
-  m_Layer: 0
+  m_Layer: 12
   m_Name: RL_containers_box_01
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -141,7 +141,9 @@ GameObject:
   m_Component:
   - component: {fileID: 4000012586168786}
   - component: {fileID: 208816622588105004}
-  m_Layer: 0
+  - component: {fileID: 65398265756473162}
+  - component: {fileID: 114930532643655942}
+  m_Layer: 12
   m_Name: RTSBK_Storage
   m_TagString: Storage
   m_Icon: {fileID: 0}
@@ -158,7 +160,7 @@ GameObject:
   - component: {fileID: 4000014244447172}
   - component: {fileID: 33000011907576018}
   - component: {fileID: 23000011419897216}
-  m_Layer: 0
+  m_Layer: 12
   m_Name: RL_containers_box_01 (1)
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -263,8 +265,8 @@ Transform:
   m_PrefabParentObject: {fileID: 0}
   m_PrefabInternal: {fileID: 100100000}
   m_GameObject: {fileID: 1000013765657912}
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 1.221, y: 0.495, z: 0.39}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: -0.09, y: 0.53, z: 0.071}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_Children:
   - {fileID: 4000011093497274}
@@ -630,6 +632,33 @@ BoxCollider:
   serializedVersion: 2
   m_Size: {x: 2, y: 0.019999966, z: 2}
   m_Center: {x: 0, y: 0.009999983, z: 0}
+--- !u!65 &65398265756473162
+BoxCollider:
+  m_ObjectHideFlags: 1
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1000013765657912}
+  m_Material: {fileID: 0}
+  m_IsTrigger: 1
+  m_Enabled: 1
+  serializedVersion: 2
+  m_Size: {x: 2.354934, y: 1, z: 2.1188967}
+  m_Center: {x: 0.0838474, y: 0, z: 0.17084467}
+--- !u!114 &114930532643655942
+MonoBehaviour:
+  m_ObjectHideFlags: 1
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1000013765657912}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9cc314c61b43c3f45b1dc34e77bdaa90, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  maxWoodCapacity: 200
+  currentWoodCapacity: 0
+  maxGoldCapacity: 200
+  currentGoldCapacity: 0
 --- !u!205 &205000011679864466
 LODGroup:
   m_ObjectHideFlags: 1

@@ -9,57 +9,58 @@ public class Storage : MonoBehaviour
     public float maxGoldCapacity; // The max gold the facility can hold
     public float currentGoldCapacity; // How much gold is currently stored
     Worker worker;
+    UIManager uIManager;
 
     void OnTriggerEnter(Collider other)
     {
         if (other.CompareTag("Worker"))
         {
+            // Get the Worker script
             worker = other.GetComponent<Worker>();
             
             // Set the flag to false so that the agent dest can be reset
             worker.destSet = false;
+            worker.hasOrders = true;
 
             if (worker.currentOrders == Worker.Orders.UNLOAD && worker.carryinAmt > 0f)
             {
-                if (worker.currentResource != null)
+                /** This ensures that the resource is dropped off 
+                    even if there's no longer a current resource 
+                    to return to. **/
+                if(worker.previousResource != null)
                 {
-                    // Unload the current resource into the correct place
-                    if (worker.currentResource.CompareTag("Choppable"))
+                    if (worker.previousResource.CompareTag("Choppable"))
                     {
                         currentWoodCapacity += worker.carryinAmt;
                         worker.currentOrders = Worker.Orders.CHOP;
                     }
-                    else if (worker.currentResource.CompareTag("Minable"))
+                    else if (worker.previousResource.CompareTag("Minable"))
                     {
                         currentGoldCapacity += worker.carryinAmt;
                         worker.currentOrders = Worker.Orders.MINE;
                     }
 
-                    // Set the carrying amount to 0
-                    worker.carryinAmt = 0f;
-
-                    //If there's more to be harvested have the worker return
-                    if (worker.currentResource.GetComponent<Resources>().maxCapacity > 0f)
+                    // This effectively decouples the UI from the Storage Facility
+                    if (GameObject.Find("HUD Manager") != null)
                     {
-                        Debug.Log(string.Format("{0} maxCapacity: {1}", worker.currentResource.name, worker.currentResource.GetComponent<Resources>().maxCapacity));
-                        worker.OnDestChange(worker.currentResource.transform.position);
-                    }
-                    //If not have het worker find the closest resource to the current one...
-                    else if (worker.currentResource.GetComponent<Resources>().maxCapacity <= 0f)
-                    {
-                    
-                        // ... if that resource isn't too far away, have the worker go there...
-                        if (Vector3.Distance(worker.transform.position, worker.currentResource.transform.position) < 10f)
-                            worker.OnDestChange(worker.currentResource.transform.position);
-                        // ... otherwise, set the worker to idle
-                        else
-                            worker.currentOrders = Worker.Orders.IDLE;
+                        var hudManager = GameObject.FindGameObjectWithTag("HUDManager");
+                        hudManager.GetComponent<UIManager>().OnResourceChange();
                     }
                 }
-            }
-            else
-            {
-                // worker.currentOrders = Worker.Orders.IDLE;
+                
+                // Set the carrying amount to 0
+                worker.carryinAmt = 0f;
+
+                // If there's more to be harvested have the worker return
+                if (worker.currentResource != null && worker.currentResource.GetComponent<Resources>().maxCapacity > 0f)
+                    worker.OnDestChange(worker.currentResource.transform.position);
+                // Otherwise set the worker to IDLE
+                else
+                {
+                    worker.hasOrders = false;
+                    worker.currentOrders = Worker.Orders.IDLE;
+                }
+                
             }
         }
     }
