@@ -135,7 +135,8 @@ public class Worker : MonoBehaviour
         // This allows the worker to move between the resource and storage if it's selected
         if (isSelected)
         {            
-            clickPoint = destination; 
+            clickPoint = destination;
+            agent.SetDestination(clickPoint);
         }
         // This allows the worker to move between the resource and storage if it isn't selected
         else

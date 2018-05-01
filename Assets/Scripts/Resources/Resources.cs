@@ -28,7 +28,7 @@ public class Resources : MonoBehaviour
                         worker.carryinAmt = worker.carryingCapacity; // set the yield to the capacity
 
                         worker.currentOrders = Worker.Orders.UNLOAD;
-                        worker.OnDestChange(FindClosestStorageFac().transform.position);
+                        worker.OnDestChange(FindClosestStorageFac().transform.position);                        
                     }
                     /** Otherwise, we set the yield to the maxCapacity,
                         change the orders to UNLOAD, send the worker to the nearest
@@ -39,7 +39,7 @@ public class Resources : MonoBehaviour
 
                         worker.currentOrders = Worker.Orders.UNLOAD;
                         worker.OnDestChange(FindClosestStorageFac().transform.position);
-
+                    worker.currentResource = FindClosestResource(gameObject);
                         gameObject.SetActive(false);
                     }
 
@@ -65,5 +65,34 @@ public class Resources : MonoBehaviour
         }
 
         return closestFac;
+    }
+
+    GameObject FindClosestResource(GameObject resource)
+    {
+        GameObject[] resources = null;
+
+        if (resource.CompareTag("Choppable"))
+            resources = GameObject.FindGameObjectsWithTag("Choppable");
+        else if (resource.CompareTag("Minable"))
+            resources = GameObject.FindGameObjectsWithTag("Minable");
+
+        GameObject closestResource = null;
+        float dist = 1000f;
+
+        foreach (GameObject resc in resources)
+        {
+            float tempDist = Vector3.Distance(gameObject.transform.position, resc.transform.position);
+
+            if (tempDist == 0f)
+                continue;
+
+            else if (tempDist < dist)
+            {
+                closestResource = resc;
+                dist = tempDist;
+            }
+        }
+
+        return closestResource;
     }
 }
