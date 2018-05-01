@@ -1,119 +1,70 @@
-﻿using System.Collections.Generic;
+﻿using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.AI;
 
-public class Storage : MonoBehaviour
+public class Storage : MonoBehaviour 
 {
-    // Properties used because I wanted to update the UI
-    [SerializeField] float goldStorageMax;
-    public float GoldStorageMax
-    {
-        get { return goldStorageMax; }
-    }
-
-    [SerializeField] float goldStorageCurrent;
-    public float CurrentGold
-    {
-        get { return goldStorageCurrent; }
-        private set
-        {
-            goldStorageCurrent = value;
-        }
-    }
-
-    [SerializeField] float woodStorageMax;
-    public float WoodStorageMax
-    {
-        get { return woodStorageMax; }
-    }
-
-    [SerializeField] float woodStorageCurrent;
-    public float CurrentWood
-    {
-        get { return woodStorageCurrent; }
-        private set
-        {
-            woodStorageCurrent = value;
-        }
-    }
-
-    UIManager updateUI;
-    List<GameObject> workers;
-
-    private void Start()
-    {
-        workers = new List<GameObject>();
-        CurrentWood = 0f;
-        CurrentGold = 0f;
-        var tempObj = GameObject.Find("HUD Manager");
-        updateUI = tempObj.GetComponent<UIManager>();
-    }
+    public float maxWoodCapacity; // The max wood the facility can hold
+    public float currentWoodCapacity; // How much wood is currently stored
+    public float maxGoldCapacity; // The max gold the facility can hold
+    public float currentGoldCapacity; // How much gold is currently stored
+    Worker worker;
+    UIManager uIManager;
 
     void OnTriggerEnter(Collider other)
     {
         if (other.CompareTag("Worker"))
         {
-            if (!workers.Contains(other.gameObject))
-            {
-                workers.Add(other.gameObject);
-            }
+            // Get the Worker script
+            worker = other.GetComponent<Worker>();
+            
+            // Set the flag to false so that the agent dest can be reset
+            worker.destSet = false;
+            worker.hasOrders = true;
 
-            foreach (GameObject obj in workers)
+            if (worker.currentOrders == Worker.Orders.UNLOAD && worker.carryinAmt > 0f)
             {
-                var orders = obj.GetComponent<WorkerOrders>();
-                if (orders.CurrentWoodCarryingAmt > 0f || orders.CurrentGoldCarryingAmt > 0f 
-                    && orders.CurrentOrders == BaseUnitOrders.Orders.UNLOAD)
+                /** This ensures that the resource is dropped off 
+                    even if there's no longer a current resource 
+                    to return to. **/
+                if(worker.previousResource != null)
                 {
-                    switch (orders.PreviousResource.tag)
+                    if (worker.previousResource.CompareTag("Choppable"))
                     {
-                        case "Minable":
-                            if (CurrentGold < GoldStorageMax)
-                            {
-                                CurrentGold += orders.CurrentGoldCarryingAmt;
-                                if (CurrentGold > GoldStorageMax)
-                                    CurrentGold = GoldStorageMax;
+                        currentWoodCapacity += worker.carryinAmt;
+                        worker.currentOrders = Worker.Orders.CHOP;
+                    }
+                    else if (worker.previousResource.CompareTag("Minable"))
+                    {
+                        currentGoldCapacity += worker.carryinAmt;
+                        worker.currentOrders = Worker.Orders.MINE;
+                    }
 
-                                orders.CurrentGoldCarryingAmt = 0f;
-                                orders.CurrentOrders = BaseUnitOrders.Orders.TAKE;
-                                orders.TakeResource(orders.GetComponent<NavMeshAgent>(), orders.PreviousResource);
-                            }
-                            else
-                            {
-                                FindOtherFacility(orders);
-                            }
-                            break;
-
-                        case "Choppable":
-                            if (CurrentWood < WoodStorageMax)
-                            {
-                                CurrentWood += orders.CurrentWoodCarryingAmt;
-                                if (CurrentWood > WoodStorageMax)
-                                    CurrentWood = WoodStorageMax;
-
-                                orders.CurrentWoodCarryingAmt = 0f;
-                                orders.CurrentOrders = BaseUnitOrders.Orders.TAKE;
-                                orders.TakeResource(orders.GetComponent<NavMeshAgent>(), orders.PreviousResource);
-                            }
-                            else
-                            {
-                                FindOtherFacility(orders);
-                            }
-                            break;
-                    }                    
-                    updateUI.OnResourceUpdate();
+                    // This effectively decouples the UI from the Storage Facility
+                    if (GameObject.Find("HUD Manager") != null)
+                    {
+                        var hudManager = GameObject.FindGameObjectWithTag("HUDManager");
+                        hudManager.GetComponent<UIManager>().OnResourceChange();
+                    }
                 }
+                
+                // Set the carrying amount to 0
+                worker.carryinAmt = 0f;
+
+                // If there's more to be harvested have the worker return
+                if (worker.currentResource != null && worker.currentResource.GetComponent<Resources>().maxCapacity > 0f)
+                    worker.OnDestChange(worker.currentResource.transform.position);
+                // Otherwise set the worker to IDLE
+                else
+                {
+                    worker.hasOrders = false;
+                    worker.currentOrders = Worker.Orders.IDLE;
+                }
+                
             }
         }
     }
 
-    void FindOtherFacility(WorkerOrders worker)
-    {
-        GameObject[] otherFacilities = GameObject.FindGameObjectsWithTag("Storage");
-        var newFac = worker.FindClosestStorage(worker.GetComponent<NavMeshAgent>(), otherFacilities);
 
-        if (newFac != null)
-            worker.Unload(worker.GetComponent<NavMeshAgent>(), newFac);
-        else
-            worker.StartingMove(worker.GetComponent<NavMeshAgent>());
-    }
 }
+>>>>>>> Scratch
