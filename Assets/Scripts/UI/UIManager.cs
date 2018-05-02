@@ -14,10 +14,11 @@ public class UIManager : MonoBehaviour
     float totalWood; // Total wood currently stored in all storage facilities
     float totalGold; // Total gold currently stored in all storage facilities
 
-    public Text currentGoldText; // Text displaying all of the currently stored gold
-    public Text maxGoldText; // Text displaying the max gold than can be stored
-    public Text currentWoodText; // Text displaying all of the currently stored wood
-    public Text maxWoodText; // Text displaying the max wood that can be stored
+    [SerializeField] Text currentGoldText; // Text displaying all of the currently stored gold
+    [SerializeField] Text maxGoldText; // Text displaying the max gold than can be stored
+    [SerializeField] Text currentWoodText; // Text displaying all of the currently stored wood
+    [SerializeField] Text maxWoodText; // Text displaying the max wood that can be stored
+
 
     private void Awake()
     {

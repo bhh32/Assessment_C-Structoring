@@ -4,17 +4,23 @@ using UnityEngine;
 
 public class CameraManager : MonoBehaviour 
 {
+    // Camera Movement Variables
     [Header("Camera Movement Settings")]
     [SerializeField] Camera mainCamera;
     [SerializeField] float scrollSpeed;
     [SerializeField] float zoomSpeed;
+
+    // Mouse Position and Scroll Wheel Data
     float mousePosX;
     float mousePosY;
     float mouseScrollWheelDelta;
 
     void Update()
     {
+        // Move the camera
         CameraMove();
+
+        // Zoom the camera
         CameraZoom();
     }
 
@@ -26,15 +32,15 @@ public class CameraManager : MonoBehaviour
         mousePosY = Input.mousePosition.y;
 
         // Check to see where the mouse is, and move the camera left or right if needed
-        if (mousePosX > Screen.width - 2f)
+        if (mousePosX > Screen.width - .5f)
             mainCamera.transform.Translate(new Vector3(scrollSpeed * Time.deltaTime, 0f, 0f));
-        else if (mousePosX < 2f)
+        else if (mousePosX < .5f)
             mainCamera.transform.Translate(new Vector3(-scrollSpeed * Time.deltaTime, 0f, 0f));
 
         // Check to see where the mouse is, and move the camera up or down if needed
-        if (mousePosY > Screen.height - 2f)
+        if (mousePosY > Screen.height - .5f)
             mainCamera.transform.Translate(new Vector3(0f, scrollSpeed * Time.deltaTime, 0f));
-        else if (mousePosY < 2f)
+        else if (mousePosY < .5f)
             mainCamera.transform.Translate(new Vector3(0f, -scrollSpeed * Time.deltaTime, 0f));
     }
 
