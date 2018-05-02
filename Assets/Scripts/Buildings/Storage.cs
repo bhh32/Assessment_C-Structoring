@@ -9,7 +9,6 @@ public class Storage : MonoBehaviour
     public float maxGoldCapacity; // The max gold the facility can hold
     public float currentGoldCapacity; // How much gold is currently stored
     Worker worker;
-    UIManager uIManager;
 
     void OnTriggerEnter(Collider other)
     {
