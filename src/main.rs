@@ -297,14 +297,14 @@ fn setup(
     commands.insert_resource(CurrentLevel(1));
 
     // Spawn Level 1 platforms and goal
-    spawn_level1(&mut commands, &asset_server);
+    spawn_level1(&mut commands, &*asset_server);
 }
 
 // ---------------------------------------------------------------------------
 // Level 1 – Original layout
 // ---------------------------------------------------------------------------
 
-fn spawn_level1(commands: &mut Commands, asset_server: &Res<AssetServer>) {
+fn spawn_level1(commands: &mut Commands, asset_server: &AssetServer) {
     let wall_tex: Handle<Image> = asset_server.load("wall.png");
     let ground_tex: Handle<Image> = asset_server.load("ground.png");
     let paddle_tex: Handle<Image> = asset_server.load("paddle.png");
@@ -453,7 +453,7 @@ fn spawn_level1(commands: &mut Commands, asset_server: &Res<AssetServer>) {
 // Level 2 – "The Ascent" – harder layout, faster platforms
 // ---------------------------------------------------------------------------
 
-fn spawn_level2(commands: &mut Commands, asset_server: &Res<AssetServer>) {
+fn spawn_level2(commands: &mut Commands, asset_server: &AssetServer) {
     let wall_tex: Handle<Image> = asset_server.load("wall.png");
     let ground_tex: Handle<Image> = asset_server.load("ground.png");
     let paddle_tex: Handle<Image> = asset_server.load("paddle.png");
@@ -668,6 +668,391 @@ fn spawn_platform_lv(
 /// Brief text banner showing the current level name.
 #[derive(Component)]
 struct LevelBanner(f32); // remaining seconds to display
+
+// ---------------------------------------------------------------------------
+// Level helpers
+// ---------------------------------------------------------------------------
+
+fn spawn_goal_at(commands: &mut Commands, asset_server: &AssetServer, x: f32, y: f32) {
+    commands.spawn((
+        Sprite {
+            image: asset_server.load("potato.png"),
+            custom_size: Some(Vec2::new(29.5, 28.125)),
+            ..default()
+        },
+        Transform::from_xyz(x, y, 2.0),
+        Goal,
+        SpriteSize(Vec2::new(29.5, 28.125)),
+        ColliderExtents(0.5),
+        LevelEntity,
+    ));
+}
+
+/// Shorthand: static platform
+fn sp_static(c: &mut Commands, tex: Handle<Image>, w: f32, h: f32, x: f32, y: f32) {
+    spawn_platform_lv(c, tex, Vec2::new(w, h), Vec2::new(x, y), PlatformKind::Static);
+}
+
+/// Shorthand: horizontal moving platform
+fn sp_horiz(c: &mut Commands, tex: Handle<Image>, w: f32, h: f32, x: f32, y: f32, min_x: f32, max_x: f32, speed: f32) {
+    spawn_platform_lv(c, tex, Vec2::new(w, h), Vec2::new(x, y), PlatformKind::Horizontal {
+        min_x, max_x, speed, moving_right: true,
+    });
+}
+
+/// Shorthand: vertical moving platform
+fn sp_vert(c: &mut Commands, tex: Handle<Image>, w: f32, h: f32, x: f32, y: f32, min_y: f32, max_y: f32, speed: f32) {
+    spawn_platform_lv(c, tex, Vec2::new(w, h), Vec2::new(x, y), PlatformKind::Vertical {
+        min_y, max_y, speed, moving_up: true,
+    });
+}
+
+/// Shorthand: diagonal up-right
+fn sp_ur(c: &mut Commands, tex: Handle<Image>, w: f32, h: f32, x: f32, y: f32, min_x: f32, max_x: f32, speed: f32) {
+    spawn_platform_lv(c, tex, Vec2::new(w, h), Vec2::new(x, y), PlatformKind::UpRight {
+        min_x, max_x, speed, moving_right: true, moving_up: true,
+    });
+}
+
+/// Shorthand: diagonal up-left
+fn sp_ul(c: &mut Commands, tex: Handle<Image>, w: f32, h: f32, x: f32, y: f32, min_x: f32, max_x: f32, speed: f32) {
+    spawn_platform_lv(c, tex, Vec2::new(w, h), Vec2::new(x, y), PlatformKind::UpLeft {
+        min_x, max_x, speed, moving_right: false, moving_up: true,
+    });
+}
+
+/// Shorthand: multi-directional
+fn sp_multi(c: &mut Commands, tex: Handle<Image>, w: f32, h: f32, x: f32, y: f32, min_x: f32, mid_x: f32, max_x: f32, speed: f32) {
+    spawn_platform_lv(c, tex, Vec2::new(w, h), Vec2::new(x, y), PlatformKind::MultiDir {
+        min_x, mid_x, max_x, speed, moving_right: true, moving_up: true, moving_left: false, moving_down: false,
+    });
+}
+
+fn tex(asset_server: &AssetServer, name: &str) -> Handle<Image> {
+    asset_server.load(format!("{name}.png"))
+}
+
+// ---------------------------------------------------------------------------
+// Level dispatcher
+// ---------------------------------------------------------------------------
+
+fn spawn_level(commands: &mut Commands, asset_server: &AssetServer, level: u32) {
+    match level {
+        1  => spawn_level1(commands, asset_server),
+        2  => spawn_level2(commands, asset_server),
+        _  => spawn_level_n(commands, asset_server, level),
+    }
+}
+
+fn spawn_level_n(c: &mut Commands, a: &AssetServer, level: u32) {
+    let wall = tex(a, "wall");
+    let gnd = tex(a, "ground");
+    let pad = tex(a, "paddle");
+
+    match level {
+        // ==================================================================
+        // Level 3 – "Stepping Stones" – small static hops across the screen
+        // ==================================================================
+        3 => {
+            spawn_goal_at(c, a, 750.0, 300.0);
+            sp_static(c, wall.clone(), 80.0, 25.0, 150.0, 80.0);
+            sp_static(c, wall.clone(), 70.0, 25.0, 300.0, 140.0);
+            sp_static(c, wall.clone(), 70.0, 25.0, 450.0, 200.0);
+            sp_static(c, wall.clone(), 80.0, 25.0, 600.0, 260.0);
+            sp_static(c, gnd.clone(), 90.0, 25.0, 740.0, 280.0);
+            sp_horiz(c, pad, 70.0, 18.0, 220.0, 110.0, 180.0, 350.0, 1.5);
+        }
+
+        // ==================================================================
+        // Level 4 – "Elevator Express" – vertical elevators staggered L-C-R
+        // ==================================================================
+        4 => {
+            spawn_goal_at(c, a, 400.0, 560.0);
+            sp_static(c, wall.clone(), 100.0, 25.0, 100.0, 80.0);
+            sp_static(c, wall.clone(), 80.0, 25.0, 400.0, 280.0);
+            sp_static(c, gnd.clone(), 100.0, 25.0, 400.0, 530.0);
+            sp_vert(c, pad.clone(), 70.0, 18.0, 100.0, 100.0, 80.0, 260.0, 1.5);
+            sp_vert(c, pad.clone(), 70.0, 18.0, 700.0, 180.0, 150.0, 380.0, 1.75);
+            sp_vert(c, pad, 60.0, 18.0, 400.0, 340.0, 310.0, 500.0, 1.5);
+            sp_static(c, wall, 80.0, 25.0, 700.0, 180.0);
+        }
+
+        // ==================================================================
+        // Level 5 – "Zigzag" – diagonal platforms forming a zigzag path up
+        // ==================================================================
+        5 => {
+            spawn_goal_at(c, a, 50.0, 500.0);
+            sp_static(c, wall.clone(), 80.0, 25.0, 700.0, 70.0);
+            sp_static(c, wall.clone(), 60.0, 25.0, 100.0, 460.0);
+            sp_ur(c, pad.clone(), 88.0, 18.0, 650.0, 80.0, 500.0, 700.0, 1.75);
+            sp_ul(c, pad.clone(), 88.0, 18.0, 300.0, 200.0, 100.0, 400.0, 1.75);
+            sp_ur(c, pad.clone(), 88.0, 18.0, 200.0, 280.0, 200.0, 500.0, 1.75);
+            sp_ul(c, pad, 80.0, 18.0, 500.0, 380.0, 150.0, 550.0, 1.75);
+        }
+
+        // ==================================================================
+        // Level 6 – "The Corridor" – wall barriers with ferries between
+        // ==================================================================
+        6 => {
+            spawn_goal_at(c, a, 750.0, 530.0);
+            // Tall wall barriers
+            sp_static(c, wall.clone(), 40.0, 300.0, 250.0, 150.0);
+            sp_static(c, wall.clone(), 40.0, 300.0, 500.0, 250.0);
+            sp_static(c, wall.clone(), 40.0, 200.0, 700.0, 350.0);
+            // Ferries between corridors
+            sp_horiz(c, pad.clone(), 88.0, 18.0, 120.0, 130.0, 50.0, 230.0, 1.75);
+            sp_vert(c, pad.clone(), 60.0, 18.0, 370.0, 200.0, 100.0, 350.0, 2.0);
+            sp_horiz(c, pad.clone(), 80.0, 18.0, 580.0, 380.0, 520.0, 680.0, 2.0);
+            sp_vert(c, pad, 50.0, 18.0, 600.0, 400.0, 380.0, 520.0, 1.75);
+            // Rest ledge
+            sp_static(c, gnd, 100.0, 25.0, 750.0, 500.0);
+        }
+
+        // ==================================================================
+        // Level 7 – "Speed Demons" – fast platforms, wide gaps
+        // ==================================================================
+        7 => {
+            spawn_goal_at(c, a, 780.0, 400.0);
+            sp_static(c, wall.clone(), 80.0, 25.0, 780.0, 370.0);
+            sp_horiz(c, pad.clone(), 80.0, 18.0, 200.0, 100.0, 100.0, 400.0, 2.5);
+            sp_horiz(c, pad.clone(), 70.0, 18.0, 600.0, 200.0, 450.0, 750.0, 2.5);
+            sp_horiz(c, pad.clone(), 75.0, 18.0, 300.0, 300.0, 150.0, 550.0, 2.5);
+            sp_vert(c, pad, 60.0, 18.0, 700.0, 300.0, 280.0, 380.0, 2.5);
+        }
+
+        // ==================================================================
+        // Level 8 – "Stairway" – static staircase with moving obstacles
+        // ==================================================================
+        8 => {
+            spawn_goal_at(c, a, 750.0, 530.0);
+            // Staircase steps
+            sp_static(c, wall.clone(), 90.0, 20.0, 100.0, 80.0);
+            sp_static(c, wall.clone(), 90.0, 20.0, 250.0, 160.0);
+            sp_static(c, wall.clone(), 90.0, 20.0, 400.0, 240.0);
+            sp_static(c, wall.clone(), 90.0, 20.0, 550.0, 320.0);
+            sp_static(c, wall.clone(), 90.0, 20.0, 700.0, 400.0);
+            sp_static(c, gnd, 100.0, 25.0, 750.0, 500.0);
+            // Moving obstacles between steps
+            sp_horiz(c, pad.clone(), 60.0, 18.0, 180.0, 140.0, 120.0, 300.0, 2.0);
+            sp_horiz(c, pad.clone(), 60.0, 18.0, 330.0, 220.0, 280.0, 460.0, 2.0);
+            sp_vert(c, pad, 50.0, 18.0, 630.0, 350.0, 330.0, 400.0, 2.0);
+        }
+
+        // ==================================================================
+        // Level 9 – "Double Decker" – two layers of horizontal ferries
+        // ==================================================================
+        9 => {
+            spawn_goal_at(c, a, 50.0, 500.0);
+            // Lower layer ferries
+            sp_horiz(c, pad.clone(), 88.0, 18.0, 200.0, 120.0, 100.0, 500.0, 1.75);
+            sp_horiz(c, pad.clone(), 80.0, 18.0, 600.0, 120.0, 450.0, 750.0, 2.0);
+            // Upper layer ferries
+            sp_horiz(c, pad.clone(), 80.0, 18.0, 500.0, 350.0, 300.0, 700.0, 2.0);
+            sp_horiz(c, pad.clone(), 70.0, 18.0, 150.0, 350.0, 50.0, 350.0, 1.75);
+            // Vertical connectors
+            sp_vert(c, pad.clone(), 50.0, 18.0, 750.0, 150.0, 120.0, 340.0, 2.0);
+            sp_vert(c, pad, 50.0, 18.0, 50.0, 360.0, 350.0, 480.0, 2.0);
+            // Rest ledge near goal
+            sp_static(c, wall, 80.0, 25.0, 50.0, 470.0);
+        }
+
+        // ==================================================================
+        // Level 10 – "Around the Tower" – central pillar, platforms wrap
+        // ==================================================================
+        10 => {
+            spawn_goal_at(c, a, 400.0, 570.0);
+            // Central tower
+            sp_static(c, wall.clone(), 80.0, 350.0, 400.0, 200.0);
+            // Platforms wrapping around
+            sp_static(c, gnd.clone(), 120.0, 25.0, 150.0, 80.0);
+            sp_static(c, gnd, 120.0, 25.0, 650.0, 80.0);
+            sp_horiz(c, pad.clone(), 80.0, 18.0, 200.0, 200.0, 80.0, 340.0, 2.0);
+            sp_horiz(c, pad.clone(), 80.0, 18.0, 600.0, 300.0, 460.0, 750.0, 2.0);
+            sp_vert(c, pad.clone(), 60.0, 18.0, 80.0, 250.0, 200.0, 400.0, 2.0);
+            sp_vert(c, pad.clone(), 60.0, 18.0, 720.0, 350.0, 300.0, 500.0, 2.0);
+            sp_horiz(c, pad, 100.0, 18.0, 400.0, 520.0, 200.0, 600.0, 1.5);
+            // Ledge just below goal
+            sp_static(c, wall, 80.0, 20.0, 400.0, 545.0);
+        }
+
+        // ==================================================================
+        // Level 11 – "Chaos Theory" – multi-dir platforms dominate
+        // ==================================================================
+        11 => {
+            spawn_goal_at(c, a, 750.0, 350.0);
+            sp_static(c, wall.clone(), 80.0, 25.0, 100.0, 80.0);
+            sp_static(c, wall, 80.0, 25.0, 750.0, 320.0);
+            sp_multi(c, pad.clone(), 88.0, 18.0, 200.0, 100.0, 150.0, 300.0, 500.0, 2.0);
+            sp_multi(c, pad.clone(), 80.0, 18.0, 400.0, 250.0, 250.0, 400.0, 650.0, 2.0);
+            sp_multi(c, pad.clone(), 75.0, 18.0, 300.0, 380.0, 200.0, 350.0, 600.0, 2.25);
+            sp_vert(c, pad, 50.0, 18.0, 700.0, 200.0, 150.0, 330.0, 2.0);
+        }
+
+        // ==================================================================
+        // Level 12 – "Minimalist" – few tiny platforms, precision jumps
+        // ==================================================================
+        12 => {
+            spawn_goal_at(c, a, 50.0, 560.0);
+            sp_static(c, wall.clone(), 50.0, 20.0, 200.0, 90.0);
+            sp_static(c, wall.clone(), 45.0, 20.0, 400.0, 180.0);
+            sp_static(c, wall.clone(), 45.0, 20.0, 600.0, 270.0);
+            sp_static(c, wall, 50.0, 20.0, 400.0, 370.0);
+            sp_vert(c, pad.clone(), 44.0, 18.0, 200.0, 370.0, 350.0, 520.0, 2.0);
+            sp_static(c, gnd, 60.0, 20.0, 50.0, 530.0);
+            sp_horiz(c, pad, 50.0, 18.0, 600.0, 460.0, 400.0, 700.0, 2.25);
+        }
+
+        // ==================================================================
+        // Level 13 – "Crossroads" – diagonals crossing each other
+        // ==================================================================
+        13 => {
+            spawn_goal_at(c, a, 400.0, 570.0);
+            sp_static(c, wall.clone(), 80.0, 25.0, 700.0, 70.0);
+            sp_static(c, wall, 80.0, 20.0, 400.0, 540.0);
+            sp_ur(c, pad.clone(), 88.0, 18.0, 600.0, 80.0, 400.0, 700.0, 2.0);
+            sp_ul(c, pad.clone(), 88.0, 18.0, 300.0, 150.0, 100.0, 450.0, 2.0);
+            sp_ur(c, pad.clone(), 80.0, 18.0, 150.0, 250.0, 100.0, 500.0, 2.25);
+            sp_ul(c, pad.clone(), 80.0, 18.0, 600.0, 350.0, 200.0, 650.0, 2.25);
+            sp_vert(c, pad, 50.0, 18.0, 300.0, 400.0, 380.0, 530.0, 2.0);
+        }
+
+        // ==================================================================
+        // Level 14 – "Traffic Jam" – many horizontals, different speeds
+        // ==================================================================
+        14 => {
+            spawn_goal_at(c, a, 780.0, 500.0);
+            sp_static(c, gnd, 90.0, 25.0, 780.0, 470.0);
+            sp_horiz(c, pad.clone(), 88.0, 18.0, 100.0, 80.0, 50.0, 400.0, 1.5);
+            sp_horiz(c, pad.clone(), 70.0, 18.0, 600.0, 150.0, 400.0, 750.0, 2.5);
+            sp_horiz(c, pad.clone(), 80.0, 18.0, 200.0, 220.0, 50.0, 500.0, 2.0);
+            sp_horiz(c, pad.clone(), 65.0, 18.0, 550.0, 300.0, 350.0, 750.0, 2.75);
+            sp_horiz(c, pad.clone(), 75.0, 18.0, 150.0, 380.0, 50.0, 450.0, 2.25);
+            sp_vert(c, pad, 50.0, 18.0, 700.0, 380.0, 370.0, 470.0, 2.5);
+        }
+
+        // ==================================================================
+        // Level 15 – "The Chimney" – narrow vertical channel
+        // ==================================================================
+        15 => {
+            spawn_goal_at(c, a, 400.0, 575.0);
+            // Chimney walls
+            sp_static(c, wall.clone(), 40.0, 600.0, 280.0, 300.0);
+            sp_static(c, wall.clone(), 40.0, 600.0, 520.0, 300.0);
+            // Alternating platforms inside chimney
+            sp_static(c, gnd.clone(), 80.0, 20.0, 350.0, 80.0);
+            sp_static(c, gnd.clone(), 80.0, 20.0, 450.0, 180.0);
+            sp_static(c, gnd.clone(), 80.0, 20.0, 350.0, 280.0);
+            sp_static(c, gnd, 80.0, 20.0, 450.0, 380.0);
+            sp_vert(c, pad.clone(), 60.0, 18.0, 400.0, 420.0, 400.0, 550.0, 2.5);
+            // Entry platform outside chimney
+            sp_static(c, wall, 100.0, 25.0, 150.0, 60.0);
+            sp_horiz(c, pad, 70.0, 18.0, 200.0, 60.0, 150.0, 300.0, 1.5);
+        }
+
+        // ==================================================================
+        // Level 16 – "Mirror Mirror" – symmetric layout, two paths up
+        // ==================================================================
+        16 => {
+            spawn_goal_at(c, a, 400.0, 575.0);
+            // Symmetric static ledges
+            sp_static(c, wall.clone(), 80.0, 25.0, 150.0, 100.0);
+            sp_static(c, wall.clone(), 80.0, 25.0, 650.0, 100.0);
+            sp_static(c, wall.clone(), 70.0, 25.0, 250.0, 250.0);
+            sp_static(c, wall.clone(), 70.0, 25.0, 550.0, 250.0);
+            sp_static(c, wall.clone(), 80.0, 25.0, 150.0, 400.0);
+            sp_static(c, wall, 80.0, 25.0, 650.0, 400.0);
+            sp_static(c, gnd, 100.0, 25.0, 400.0, 545.0);
+            // Symmetric vertical elevators
+            sp_vert(c, pad.clone(), 50.0, 18.0, 150.0, 130.0, 100.0, 380.0, 2.25);
+            sp_vert(c, pad.clone(), 50.0, 18.0, 650.0, 130.0, 100.0, 380.0, 2.25);
+            // Center connector
+            sp_horiz(c, pad, 80.0, 18.0, 400.0, 460.0, 250.0, 550.0, 2.0);
+        }
+
+        // ==================================================================
+        // Level 17 – "The Labyrinth" – dense walls creating a maze
+        // ==================================================================
+        17 => {
+            spawn_goal_at(c, a, 700.0, 80.0);
+            // Maze walls
+            sp_static(c, wall.clone(), 30.0, 150.0, 200.0, 80.0);
+            sp_static(c, wall.clone(), 200.0, 30.0, 350.0, 150.0);
+            sp_static(c, wall.clone(), 30.0, 200.0, 500.0, 200.0);
+            sp_static(c, wall.clone(), 200.0, 30.0, 350.0, 300.0);
+            sp_static(c, wall.clone(), 30.0, 150.0, 200.0, 380.0);
+            sp_static(c, wall, 150.0, 30.0, 550.0, 400.0);
+            // Moving platforms to navigate maze
+            sp_horiz(c, pad.clone(), 60.0, 18.0, 100.0, 100.0, 50.0, 180.0, 2.0);
+            sp_vert(c, pad.clone(), 50.0, 18.0, 300.0, 80.0, 50.0, 140.0, 2.5);
+            sp_horiz(c, pad.clone(), 60.0, 18.0, 400.0, 230.0, 340.0, 480.0, 2.25);
+            sp_vert(c, pad.clone(), 50.0, 18.0, 600.0, 300.0, 160.0, 390.0, 2.5);
+            sp_horiz(c, pad, 70.0, 18.0, 500.0, 450.0, 400.0, 700.0, 2.0);
+            sp_static(c, gnd, 80.0, 20.0, 700.0, 55.0);
+        }
+
+        // ==================================================================
+        // Level 18 – "Turbo Mode" – everything moves at 3.0 speed
+        // ==================================================================
+        18 => {
+            spawn_goal_at(c, a, 50.0, 560.0);
+            sp_static(c, wall.clone(), 60.0, 20.0, 50.0, 530.0);
+            sp_static(c, wall, 80.0, 25.0, 700.0, 70.0);
+            sp_horiz(c, pad.clone(), 80.0, 18.0, 500.0, 80.0, 350.0, 700.0, 3.0);
+            sp_vert(c, pad.clone(), 55.0, 18.0, 200.0, 100.0, 80.0, 250.0, 3.0);
+            sp_ur(c, pad.clone(), 80.0, 18.0, 400.0, 200.0, 300.0, 600.0, 3.0);
+            sp_horiz(c, pad.clone(), 70.0, 18.0, 200.0, 350.0, 50.0, 400.0, 3.0);
+            sp_ul(c, pad.clone(), 75.0, 18.0, 500.0, 400.0, 150.0, 550.0, 3.0);
+            sp_vert(c, pad, 50.0, 18.0, 100.0, 430.0, 400.0, 520.0, 3.0);
+        }
+
+        // ==================================================================
+        // Level 19 – "Needle Threading" – tiny platforms, exact jumps
+        // ==================================================================
+        19 => {
+            spawn_goal_at(c, a, 780.0, 560.0);
+            sp_static(c, wall.clone(), 40.0, 15.0, 180.0, 80.0);
+            sp_static(c, wall.clone(), 35.0, 15.0, 350.0, 150.0);
+            sp_static(c, wall.clone(), 35.0, 15.0, 520.0, 230.0);
+            sp_static(c, wall.clone(), 40.0, 15.0, 350.0, 310.0);
+            sp_static(c, wall.clone(), 35.0, 15.0, 180.0, 390.0);
+            sp_static(c, wall, 40.0, 15.0, 400.0, 470.0);
+            sp_vert(c, pad.clone(), 38.0, 18.0, 600.0, 320.0, 280.0, 430.0, 3.0);
+            sp_horiz(c, pad.clone(), 40.0, 18.0, 650.0, 500.0, 550.0, 780.0, 3.0);
+            sp_static(c, gnd, 50.0, 15.0, 780.0, 535.0);
+            sp_vert(c, pad, 35.0, 18.0, 250.0, 200.0, 150.0, 310.0, 2.75);
+        }
+
+        // ==================================================================
+        // Level 20 – "The Gauntlet" – ultimate challenge, all types combined
+        // ==================================================================
+        20 => {
+            spawn_goal_at(c, a, 400.0, 580.0);
+            // Bottom tier
+            sp_static(c, wall.clone(), 60.0, 20.0, 700.0, 60.0);
+            sp_horiz(c, pad.clone(), 55.0, 18.0, 400.0, 60.0, 250.0, 650.0, 3.0);
+            // Tier 2
+            sp_ur(c, pad.clone(), 60.0, 18.0, 200.0, 80.0, 100.0, 400.0, 3.0);
+            sp_static(c, wall.clone(), 40.0, 15.0, 600.0, 180.0);
+            // Tier 3
+            sp_ul(c, pad.clone(), 55.0, 18.0, 500.0, 220.0, 200.0, 600.0, 3.25);
+            sp_vert(c, pad.clone(), 40.0, 18.0, 100.0, 200.0, 180.0, 330.0, 3.0);
+            // Tier 4
+            sp_horiz(c, pad.clone(), 50.0, 18.0, 300.0, 330.0, 150.0, 500.0, 3.25);
+            sp_static(c, wall.clone(), 35.0, 15.0, 700.0, 320.0);
+            // Tier 5
+            sp_multi(c, pad.clone(), 55.0, 18.0, 500.0, 400.0, 300.0, 450.0, 700.0, 3.0);
+            sp_vert(c, pad.clone(), 38.0, 18.0, 150.0, 380.0, 350.0, 480.0, 3.25);
+            // Summit
+            sp_horiz(c, pad, 45.0, 18.0, 400.0, 530.0, 250.0, 550.0, 3.5);
+            sp_static(c, gnd, 60.0, 20.0, 400.0, 555.0);
+        }
+
+        _ => {
+            // Fallback: re-use Level 1
+            spawn_level1(c, a);
+        }
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Player Input System
@@ -1104,8 +1489,8 @@ fn update_anim_timer(anim: &mut AnimState, dt: f32) {
 // ---------------------------------------------------------------------------
 
 /// When the player reaches the goal:
-/// - Level 1 → despawn level entities, reset player, spawn Level 2
-/// - Level 2 → show fireworks & "Good Job!"
+/// - Levels 1–19 → despawn level entities, reset player, spawn next level
+/// - Level 20     → show fireworks & "You Win!"
 fn endgame_system(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
@@ -1133,8 +1518,8 @@ fn endgame_system(
         return;
     }
 
-    if level.0 == 1 {
-        // ---- Transition to Level 2 ----
+    if level.0 < 20 {
+        // ---- Transition to next level ----
 
         // Despawn all level-specific entities (platforms, goal)
         for entity in &level_entities {
@@ -1159,13 +1544,13 @@ fn endgame_system(
             atlas.index = 0;
         }
 
-        // Spawn Level 2
-        spawn_level2(&mut commands, &asset_server);
-        level.0 = 2;
+        // Advance to next level
+        level.0 += 1;
+        spawn_level(&mut commands, &*asset_server, level.0);
 
-        // Show "Level 2" banner
+        // Show level banner
         commands.spawn((
-            Text2d::new("Level 2"),
+            Text2d::new(format!("Level {}", level.0)),
             TextFont {
                 font_size: 72.0,
                 ..default()
@@ -1175,7 +1560,7 @@ fn endgame_system(
             LevelBanner(2.0),
         ));
     } else {
-        // ---- Level 2 complete – show fireworks ----
+        // ---- All 20 levels complete – show fireworks ----
         let mut rng = rand::thread_rng();
 
         for (mut tf, mut vis) in &mut firework_q {
