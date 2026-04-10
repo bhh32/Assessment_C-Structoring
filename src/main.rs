@@ -13,6 +13,7 @@ const JUMP_MULTIPLIER: f32 = 30.0;
 const PLAYER_MOVE_FORCE: f32 = 5.0;
 const PLAYER_DRAG_GROUNDED: f32 = 3.0;
 const PLATFORM_SPEED: f32 = 1.5;
+const PLATFORM_SPEED_L2: f32 = 2.0;
 
 // Mario sprite-sheet: 357×66 px, 21 columns × 2 rows
 const MARIO_COLS: u32 = 21;
@@ -122,6 +123,14 @@ struct Firework;
 #[derive(Component)]
 struct WinText;
 
+/// Marker for entities that belong to the current level and should be despawned
+/// on level transition.
+#[derive(Component)]
+struct LevelEntity;
+
+#[derive(Resource)]
+struct CurrentLevel(u32);
+
 /// Tracks which platform (if any) the player is riding so we can apply its
 /// velocity to the player each frame (replicates the original's parenting).
 #[derive(Resource, Default)]
@@ -200,19 +209,6 @@ fn setup(
         ColliderExtents(0.42),
     ));
 
-    // ---- Goal (potato) ----
-    commands.spawn((
-        Sprite {
-            image: asset_server.load("potato.png"),
-            custom_size: Some(Vec2::new(29.5, 28.125)),
-            ..default()
-        },
-        Transform::from_xyz(780.0, 530.0, 2.0),
-        Goal,
-        SpriteSize(Vec2::new(29.5, 28.125)),
-        ColliderExtents(0.5),
-    ));
-
     // ---- Player (Mario) ----
     let layout = TextureAtlasLayout::from_grid(
         UVec2::new(MARIO_TILE_W, MARIO_TILE_H),
@@ -257,136 +253,6 @@ fn setup(
         },
     ));
 
-    // ---- Static Platforms ----
-    let wall_tex: Handle<Image> = asset_server.load("wall.png");
-    let ground_tex: Handle<Image> = asset_server.load("ground.png");
-    let paddle_tex: Handle<Image> = asset_server.load("paddle.png");
-
-    // Static[0]: wall, 150×200 at (500, 40)
-    spawn_platform(
-        &mut commands,
-        wall_tex.clone(),
-        Vec2::new(150.0, 200.0),
-        Vec2::new(500.0, 40.0),
-        PlatformKind::Static,
-    );
-    // Static[1]: wall, 150×50 at (0, 350)
-    spawn_platform(
-        &mut commands,
-        wall_tex.clone(),
-        Vec2::new(150.0, 50.0),
-        Vec2::new(0.0, 350.0),
-        PlatformKind::Static,
-    );
-    // Static[2]: ground texture, 150×50 at (800, 500)
-    spawn_platform(
-        &mut commands,
-        ground_tex,
-        Vec2::new(150.0, 50.0),
-        Vec2::new(800.0, 500.0),
-        PlatformKind::Static,
-    );
-
-    // ---- Horizontal Moving Platform ----
-    spawn_platform(
-        &mut commands,
-        paddle_tex.clone(),
-        Vec2::new(88.0, 18.0),
-        Vec2::new(600.0, 250.0),
-        PlatformKind::Horizontal {
-            min_x: 600.0,
-            max_x: 750.0,
-            speed: PLATFORM_SPEED,
-            moving_right: true,
-        },
-    );
-
-    // ---- UpRight Moving Platform ----
-    spawn_platform(
-        &mut commands,
-        paddle_tex.clone(),
-        Vec2::new(88.0, 18.0),
-        Vec2::new(25.0, 30.0),
-        PlatformKind::UpRight {
-            min_x: 110.0,
-            max_x: 275.0,
-            speed: PLATFORM_SPEED,
-            moving_right: true,
-            moving_up: true,
-        },
-    );
-
-    // ---- UpLeft Moving Platform ----
-    spawn_platform(
-        &mut commands,
-        paddle_tex.clone(),
-        Vec2::new(88.0, 18.0),
-        Vec2::new(520.0, 280.0),
-        PlatformKind::UpLeft {
-            min_x: 150.0,
-            max_x: 500.0,
-            speed: PLATFORM_SPEED,
-            moving_right: false,
-            moving_up: true,
-        },
-    );
-
-    // ---- Vertical Moving Platforms ----
-    spawn_platform(
-        &mut commands,
-        paddle_tex.clone(),
-        Vec2::new(88.0, 18.0),
-        Vec2::new(500.0, 180.0),
-        PlatformKind::Vertical {
-            min_y: 180.0,
-            max_y: 225.0,
-            speed: PLATFORM_SPEED,
-            moving_up: true,
-        },
-    );
-    spawn_platform(
-        &mut commands,
-        paddle_tex.clone(),
-        Vec2::new(44.0, 18.0),
-        Vec2::new(620.0, 20.0),
-        PlatformKind::Vertical {
-            min_y: 20.0,
-            max_y: 100.0,
-            speed: PLATFORM_SPEED,
-            moving_up: true,
-        },
-    );
-    spawn_platform(
-        &mut commands,
-        paddle_tex.clone(),
-        Vec2::new(50.0, 18.0),
-        Vec2::new(90.0, 420.0),
-        PlatformKind::Vertical {
-            min_y: 400.0,
-            max_y: 460.0,
-            speed: PLATFORM_SPEED,
-            moving_up: true,
-        },
-    );
-
-    // ---- Multi-Directional Moving Platform ----
-    spawn_platform(
-        &mut commands,
-        paddle_tex,
-        Vec2::new(88.0, 18.0),
-        Vec2::new(125.0, 460.0),
-        PlatformKind::MultiDir {
-            min_x: 200.0,
-            mid_x: 250.0,
-            max_x: 650.0,
-            speed: PLATFORM_SPEED,
-            moving_right: true,
-            moving_up: true,
-            moving_left: false,
-            moving_down: false,
-        },
-    );
-
     // ---- Fireworks (hidden until win) ----
     for i in 0..8u32 {
         commands.spawn((
@@ -414,11 +280,368 @@ fn setup(
         WinText,
     ));
 
-    // Resource to link player to platform velocity
+    // ---- Level Banner (shows "Level 1" / "Level 2" briefly) ----
+    commands.spawn((
+        Text2d::new("Level 1"),
+        TextFont {
+            font_size: 72.0,
+            ..default()
+        },
+        TextColor(Color::WHITE),
+        Transform::from_xyz(400.0, 350.0, 10.0),
+        LevelBanner(2.0),
+    ));
+
+    // Resources
     commands.insert_resource(PlayerPlatformLink::default());
+    commands.insert_resource(CurrentLevel(1));
+
+    // Spawn Level 1 platforms and goal
+    spawn_level1(&mut commands, &asset_server);
 }
 
-fn spawn_platform(
+// ---------------------------------------------------------------------------
+// Level 1 – Original layout
+// ---------------------------------------------------------------------------
+
+fn spawn_level1(commands: &mut Commands, asset_server: &Res<AssetServer>) {
+    let wall_tex: Handle<Image> = asset_server.load("wall.png");
+    let ground_tex: Handle<Image> = asset_server.load("ground.png");
+    let paddle_tex: Handle<Image> = asset_server.load("paddle.png");
+
+    // Goal (potato) – top-right
+    commands.spawn((
+        Sprite {
+            image: asset_server.load("potato.png"),
+            custom_size: Some(Vec2::new(29.5, 28.125)),
+            ..default()
+        },
+        Transform::from_xyz(780.0, 530.0, 2.0),
+        Goal,
+        SpriteSize(Vec2::new(29.5, 28.125)),
+        ColliderExtents(0.5),
+        LevelEntity,
+    ));
+
+    // Static[0]: wall, 150×200 at (500, 40)
+    spawn_platform_lv(
+        commands,
+        wall_tex.clone(),
+        Vec2::new(150.0, 200.0),
+        Vec2::new(500.0, 40.0),
+        PlatformKind::Static,
+    );
+    // Static[1]: wall, 150×50 at (0, 350)
+    spawn_platform_lv(
+        commands,
+        wall_tex.clone(),
+        Vec2::new(150.0, 50.0),
+        Vec2::new(0.0, 350.0),
+        PlatformKind::Static,
+    );
+    // Static[2]: ground texture, 150×50 at (800, 500)
+    spawn_platform_lv(
+        commands,
+        ground_tex,
+        Vec2::new(150.0, 50.0),
+        Vec2::new(800.0, 500.0),
+        PlatformKind::Static,
+    );
+
+    // Horizontal Moving Platform
+    spawn_platform_lv(
+        commands,
+        paddle_tex.clone(),
+        Vec2::new(88.0, 18.0),
+        Vec2::new(600.0, 250.0),
+        PlatformKind::Horizontal {
+            min_x: 600.0,
+            max_x: 750.0,
+            speed: PLATFORM_SPEED,
+            moving_right: true,
+        },
+    );
+
+    // UpRight Moving Platform
+    spawn_platform_lv(
+        commands,
+        paddle_tex.clone(),
+        Vec2::new(88.0, 18.0),
+        Vec2::new(25.0, 30.0),
+        PlatformKind::UpRight {
+            min_x: 110.0,
+            max_x: 275.0,
+            speed: PLATFORM_SPEED,
+            moving_right: true,
+            moving_up: true,
+        },
+    );
+
+    // UpLeft Moving Platform
+    spawn_platform_lv(
+        commands,
+        paddle_tex.clone(),
+        Vec2::new(88.0, 18.0),
+        Vec2::new(520.0, 280.0),
+        PlatformKind::UpLeft {
+            min_x: 150.0,
+            max_x: 500.0,
+            speed: PLATFORM_SPEED,
+            moving_right: false,
+            moving_up: true,
+        },
+    );
+
+    // Vertical Moving Platforms
+    spawn_platform_lv(
+        commands,
+        paddle_tex.clone(),
+        Vec2::new(88.0, 18.0),
+        Vec2::new(500.0, 180.0),
+        PlatformKind::Vertical {
+            min_y: 180.0,
+            max_y: 225.0,
+            speed: PLATFORM_SPEED,
+            moving_up: true,
+        },
+    );
+    spawn_platform_lv(
+        commands,
+        paddle_tex.clone(),
+        Vec2::new(44.0, 18.0),
+        Vec2::new(620.0, 20.0),
+        PlatformKind::Vertical {
+            min_y: 20.0,
+            max_y: 100.0,
+            speed: PLATFORM_SPEED,
+            moving_up: true,
+        },
+    );
+    spawn_platform_lv(
+        commands,
+        paddle_tex.clone(),
+        Vec2::new(50.0, 18.0),
+        Vec2::new(90.0, 420.0),
+        PlatformKind::Vertical {
+            min_y: 400.0,
+            max_y: 460.0,
+            speed: PLATFORM_SPEED,
+            moving_up: true,
+        },
+    );
+
+    // Multi-Directional Moving Platform
+    spawn_platform_lv(
+        commands,
+        paddle_tex,
+        Vec2::new(88.0, 18.0),
+        Vec2::new(125.0, 460.0),
+        PlatformKind::MultiDir {
+            min_x: 200.0,
+            mid_x: 250.0,
+            max_x: 650.0,
+            speed: PLATFORM_SPEED,
+            moving_right: true,
+            moving_up: true,
+            moving_left: false,
+            moving_down: false,
+        },
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Level 2 – "The Ascent" – harder layout, faster platforms
+// ---------------------------------------------------------------------------
+
+fn spawn_level2(commands: &mut Commands, asset_server: &Res<AssetServer>) {
+    let wall_tex: Handle<Image> = asset_server.load("wall.png");
+    let ground_tex: Handle<Image> = asset_server.load("ground.png");
+    let paddle_tex: Handle<Image> = asset_server.load("paddle.png");
+
+    // Goal (potato) – top-left, reached by climbing
+    commands.spawn((
+        Sprite {
+            image: asset_server.load("potato.png"),
+            custom_size: Some(Vec2::new(29.5, 28.125)),
+            ..default()
+        },
+        Transform::from_xyz(50.0, 560.0, 2.0),
+        Goal,
+        SpriteSize(Vec2::new(29.5, 28.125)),
+        ColliderExtents(0.5),
+        LevelEntity,
+    ));
+
+    // ---- Static Platforms: stepping-stone path ----
+
+    // Low ledge on the right – first jump target from ground
+    spawn_platform_lv(
+        commands,
+        wall_tex.clone(),
+        Vec2::new(120.0, 30.0),
+        Vec2::new(700.0, 80.0),
+        PlatformKind::Static,
+    );
+
+    // Mid wall block – rest point
+    spawn_platform_lv(
+        commands,
+        wall_tex.clone(),
+        Vec2::new(100.0, 120.0),
+        Vec2::new(200.0, 160.0),
+        PlatformKind::Static,
+    );
+
+    // Upper-right ledge
+    spawn_platform_lv(
+        commands,
+        ground_tex.clone(),
+        Vec2::new(100.0, 25.0),
+        Vec2::new(650.0, 320.0),
+        PlatformKind::Static,
+    );
+
+    // Small step near top-left (just below goal)
+    spawn_platform_lv(
+        commands,
+        wall_tex.clone(),
+        Vec2::new(80.0, 25.0),
+        Vec2::new(100.0, 520.0),
+        PlatformKind::Static,
+    );
+
+    // Narrow pillar obstacle in the middle
+    spawn_platform_lv(
+        commands,
+        wall_tex.clone(),
+        Vec2::new(40.0, 180.0),
+        Vec2::new(400.0, 120.0),
+        PlatformKind::Static,
+    );
+
+    // ---- Moving Platforms (faster speed for Level 2) ----
+
+    // Lower horizontal ferry – carries player from right to mid wall
+    spawn_platform_lv(
+        commands,
+        paddle_tex.clone(),
+        Vec2::new(88.0, 18.0),
+        Vec2::new(500.0, 120.0),
+        PlatformKind::Horizontal {
+            min_x: 300.0,
+            max_x: 650.0,
+            speed: PLATFORM_SPEED_L2,
+            moving_right: true,
+        },
+    );
+
+    // Upper horizontal ferry
+    spawn_platform_lv(
+        commands,
+        paddle_tex.clone(),
+        Vec2::new(70.0, 18.0),
+        Vec2::new(500.0, 420.0),
+        PlatformKind::Horizontal {
+            min_x: 350.0,
+            max_x: 700.0,
+            speed: PLATFORM_SPEED_L2,
+            moving_right: false,
+        },
+    );
+
+    // Left elevator – rides up from mid to upper area
+    spawn_platform_lv(
+        commands,
+        paddle_tex.clone(),
+        Vec2::new(60.0, 18.0),
+        Vec2::new(100.0, 250.0),
+        PlatformKind::Vertical {
+            min_y: 250.0,
+            max_y: 450.0,
+            speed: PLATFORM_SPEED_L2,
+            moving_up: true,
+        },
+    );
+
+    // Right elevator – fast, short stroke
+    spawn_platform_lv(
+        commands,
+        paddle_tex.clone(),
+        Vec2::new(50.0, 18.0),
+        Vec2::new(750.0, 150.0),
+        PlatformKind::Vertical {
+            min_y: 150.0,
+            max_y: 300.0,
+            speed: PLATFORM_SPEED_L2,
+            moving_up: true,
+        },
+    );
+
+    // Diagonal ramp up-right – lifts from lower-left area
+    spawn_platform_lv(
+        commands,
+        paddle_tex.clone(),
+        Vec2::new(88.0, 18.0),
+        Vec2::new(250.0, 60.0),
+        PlatformKind::UpRight {
+            min_x: 250.0,
+            max_x: 500.0,
+            speed: PLATFORM_SPEED_L2,
+            moving_right: true,
+            moving_up: true,
+        },
+    );
+
+    // Diagonal ramp up-left – descends from upper-right
+    spawn_platform_lv(
+        commands,
+        paddle_tex.clone(),
+        Vec2::new(70.0, 18.0),
+        Vec2::new(600.0, 350.0),
+        PlatformKind::UpLeft {
+            min_x: 200.0,
+            max_x: 600.0,
+            speed: PLATFORM_SPEED_L2,
+            moving_right: false,
+            moving_up: true,
+        },
+    );
+
+    // Multi-directional platform – complex path through upper area
+    spawn_platform_lv(
+        commands,
+        paddle_tex.clone(),
+        Vec2::new(88.0, 18.0),
+        Vec2::new(300.0, 480.0),
+        PlatformKind::MultiDir {
+            min_x: 200.0,
+            mid_x: 350.0,
+            max_x: 600.0,
+            speed: PLATFORM_SPEED_L2,
+            moving_right: true,
+            moving_up: true,
+            moving_left: false,
+            moving_down: false,
+        },
+    );
+
+    // Extra small vertical platform – tricky timing
+    spawn_platform_lv(
+        commands,
+        paddle_tex,
+        Vec2::new(44.0, 18.0),
+        Vec2::new(350.0, 350.0),
+        PlatformKind::Vertical {
+            min_y: 300.0,
+            max_y: 420.0,
+            speed: PLATFORM_SPEED_L2,
+            moving_up: true,
+        },
+    );
+}
+
+/// Spawn a platform tagged with `LevelEntity` so it is despawned between levels.
+fn spawn_platform_lv(
     commands: &mut Commands,
     texture: Handle<Image>,
     size: Vec2,
@@ -438,8 +661,13 @@ fn spawn_platform(
         ColliderExtents(0.5),
         Velocity(Vec2::ZERO),
         Mass(100.0),
+        LevelEntity,
     ));
 }
+
+/// Brief text banner showing the current level name.
+#[derive(Component)]
+struct LevelBanner(f32); // remaining seconds to display
 
 // ---------------------------------------------------------------------------
 // Player Input System
@@ -875,12 +1103,29 @@ fn update_anim_timer(anim: &mut AnimState, dt: f32) {
 // End-Game / Fireworks System
 // ---------------------------------------------------------------------------
 
+/// When the player reaches the goal:
+/// - Level 1 → despawn level entities, reset player, spawn Level 2
+/// - Level 2 → show fireworks & "Good Job!"
 fn endgame_system(
-    player_q: Query<&Player>,
-    mut firework_q: Query<(&mut Transform, &mut Visibility), (With<Firework>, Without<WinText>)>,
-    mut text_q: Query<&mut Visibility, (With<WinText>, Without<Firework>)>,
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+    mut level: ResMut<CurrentLevel>,
+    mut player_q: Query<(
+        &mut Player,
+        &mut Transform,
+        &mut Velocity,
+        &mut Impulse,
+        &mut Force,
+        &mut AnimState,
+        &mut Sprite,
+    )>,
+    level_entities: Query<Entity, With<LevelEntity>>,
+    mut firework_q: Query<(&mut Transform, &mut Visibility), (With<Firework>, Without<WinText>, Without<Player>)>,
+    mut text_q: Query<(&mut Visibility, &mut Text2d), (With<WinText>, Without<Firework>, Without<Player>)>,
 ) {
-    let Ok(player) = player_q.get_single() else {
+    let Ok((mut player, mut p_tf, mut vel, mut imp, mut force, mut anim, mut sprite)) =
+        player_q.get_single_mut()
+    else {
         return;
     };
 
@@ -888,18 +1133,80 @@ fn endgame_system(
         return;
     }
 
-    let mut rng = rand::thread_rng();
+    if level.0 == 1 {
+        // ---- Transition to Level 2 ----
 
-    // Show fireworks at random positions
-    for (mut tf, mut vis) in &mut firework_q {
-        *vis = Visibility::Visible;
-        tf.translation.x = rng.gen_range(50.0..750.0);
-        tf.translation.y = rng.gen_range(50.0..550.0);
+        // Despawn all level-specific entities (platforms, goal)
+        for entity in &level_entities {
+            commands.entity(entity).despawn();
+        }
+
+        // Reset the player
+        player.end_game = false;
+        player.is_grounded = false;
+        player.is_on_platform = false;
+        player.gravity = GRAVITY;
+        p_tf.translation.x = 10.0;
+        p_tf.translation.y = 21.0;
+        vel.0 = Vec2::ZERO;
+        imp.0 = Vec2::ZERO;
+        force.0 = Vec2::ZERO;
+        anim.idx = 0;
+        anim.min = 0;
+        anim.max = 0;
+        anim.facing_right = true;
+        if let Some(ref mut atlas) = sprite.texture_atlas {
+            atlas.index = 0;
+        }
+
+        // Spawn Level 2
+        spawn_level2(&mut commands, &asset_server);
+        level.0 = 2;
+
+        // Show "Level 2" banner
+        commands.spawn((
+            Text2d::new("Level 2"),
+            TextFont {
+                font_size: 72.0,
+                ..default()
+            },
+            TextColor(Color::WHITE),
+            Transform::from_xyz(400.0, 350.0, 10.0),
+            LevelBanner(2.0),
+        ));
+    } else {
+        // ---- Level 2 complete – show fireworks ----
+        let mut rng = rand::thread_rng();
+
+        for (mut tf, mut vis) in &mut firework_q {
+            *vis = Visibility::Visible;
+            tf.translation.x = rng.gen_range(50.0..750.0);
+            tf.translation.y = rng.gen_range(50.0..550.0);
+        }
+
+        for (mut vis, mut text) in &mut text_q {
+            *vis = Visibility::Visible;
+            *text = Text2d::new("You Win!");
+        }
     }
+}
 
-    // Show win text
-    for mut vis in &mut text_q {
-        *vis = Visibility::Visible;
+/// Fade out the level banner after its timer expires.
+fn level_banner_system(
+    mut commands: Commands,
+    time: Res<Time>,
+    mut query: Query<(Entity, &mut LevelBanner, &mut TextColor)>,
+) {
+    let dt = time.delta_secs();
+    for (entity, mut banner, mut color) in &mut query {
+        banner.0 -= dt;
+        if banner.0 <= 0.0 {
+            commands.entity(entity).despawn();
+        } else {
+            // Fade out during the last second
+            let alpha = banner.0.min(1.0);
+            *color = TextColor(Color::srgba(1.0, 1.0, 1.0, alpha));
+        }
     }
 }
 
@@ -928,6 +1235,7 @@ fn main() {
                 collision_system,
                 animation_system,
                 endgame_system,
+                level_banner_system,
             )
                 .chain(),
         )
