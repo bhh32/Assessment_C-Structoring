@@ -1,25 +1,32 @@
 use bevy::prelude::*;
+use bevy_rapier2d::prelude::*;
 use rand::Rng;
 
 // ---------------------------------------------------------------------------
-// Constants – matched to the original C++ / SFW game
+// Constants
 // ---------------------------------------------------------------------------
 const WINDOW_WIDTH: f32 = 800.0;
 const WINDOW_HEIGHT: f32 = 600.0;
 
-// Physics (original uses per-frame gravity at ~60 fps)
-const GRAVITY: f32 = -9.8;
-const JUMP_MULTIPLIER: f32 = 30.0;
-const PLAYER_MOVE_FORCE: f32 = 5.0;
-const PLAYER_DRAG_GROUNDED: f32 = 3.0;
+// Physics – tuned to match the original C++ / SFW game feel.
+// Original: per-frame gravity of -9.8 at ~60 fps ≈ -588 px/s².
+const GRAVITY_ACCEL: f32 = 588.0;
+// Original jump impulse: 9.8 * 30 = 294 px/s.
+const JUMP_IMPULSE: f32 = 294.0;
+// Original horizontal force: dimension.x(50) * 5 = 250.
+const MOVE_FORCE: f32 = 250.0;
 const PLATFORM_SPEED: f32 = 1.5;
 const PLATFORM_SPEED_L2: f32 = 2.0;
 
 // Mario sprite-sheet: 357×66 px, 21 columns × 2 rows
 const MARIO_COLS: u32 = 21;
 const MARIO_ROWS: u32 = 2;
-const MARIO_TILE_W: u32 = 17; // 357 / 21
-const MARIO_TILE_H: u32 = 33; // 66 / 2
+const MARIO_TILE_W: u32 = 17;
+const MARIO_TILE_H: u32 = 33;
+
+// Player half-extents for the collider (50×75 sprite → 25×37.5)
+const PLAYER_HALF_W: f32 = 25.0;
+const PLAYER_HALF_H: f32 = 37.5;
 
 // ---------------------------------------------------------------------------
 // Components
@@ -27,32 +34,13 @@ const MARIO_TILE_H: u32 = 33; // 66 / 2
 
 #[derive(Component)]
 struct Player {
-    gravity: f32,
     is_grounded: bool,
     is_on_platform: bool,
     end_game: bool,
 }
 
-#[derive(Component)]
-struct Velocity(Vec2);
-
-#[derive(Component)]
-struct Impulse(Vec2);
-
-#[derive(Component)]
-struct Force(Vec2);
-
-#[derive(Component)]
-struct Mass(f32);
-
-#[derive(Component)]
-struct Drag(f32);
-
-/// Half-extents factor relative to the sprite's custom_size.
-/// 0.5 means collision box == full sprite, 0.42 for ground, etc.
-#[derive(Component)]
-struct ColliderExtents(f32);
-
+/// Stores the sprite visual size; used by platform_movement to scale velocity
+/// by dimension (matching the original game's behaviour).
 #[derive(Component)]
 struct SpriteSize(Vec2);
 
@@ -139,38 +127,6 @@ struct PlayerPlatformLink {
 }
 
 // ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/// AABB overlap test.  Returns `Some((push_axis, penetration))` on collision.
-fn aabb_overlap(
-    pos_a: Vec2,
-    half_a: Vec2,
-    pos_b: Vec2,
-    half_b: Vec2,
-) -> Option<(Vec2, f32)> {
-    let diff = pos_a - pos_b;
-    let overlap_x = half_a.x + half_b.x - diff.x.abs();
-    let overlap_y = half_a.y + half_b.y - diff.y.abs();
-
-    if overlap_x > 0.0 && overlap_y > 0.0 {
-        if overlap_x < overlap_y {
-            let axis = if diff.x > 0.0 { Vec2::X } else { Vec2::NEG_X };
-            Some((axis, overlap_x))
-        } else {
-            let axis = if diff.y > 0.0 { Vec2::Y } else { Vec2::NEG_Y };
-            Some((axis, overlap_y))
-        }
-    } else {
-        None
-    }
-}
-
-fn half_extents(size: Vec2, factor: f32) -> Vec2 {
-    size * factor
-}
-
-// ---------------------------------------------------------------------------
 // Setup
 // ---------------------------------------------------------------------------
 
@@ -196,7 +152,7 @@ fn setup(
         Transform::from_xyz(400.0, 300.0, 0.0),
     ));
 
-    // ---- Ground ----
+    // ---- Ground (Rapier: Fixed body) ----
     commands.spawn((
         Sprite {
             image: asset_server.load("ground.png"),
@@ -205,11 +161,11 @@ fn setup(
         },
         Transform::from_xyz(400.0, -200.0, 1.0),
         Ground,
-        SpriteSize(Vec2::new(2000.0, 500.0)),
-        ColliderExtents(0.42),
+        RigidBody::Fixed,
+        Collider::cuboid(2000.0 * 0.42, 500.0 * 0.42), // 0.42 extents like original
     ));
 
-    // ---- Player (Mario) ----
+    // ---- Player (Rapier: Dynamic body, manual gravity) ----
     let layout = TextureAtlasLayout::from_grid(
         UVec2::new(MARIO_TILE_W, MARIO_TILE_H),
         MARIO_COLS,
@@ -229,20 +185,23 @@ fn setup(
             custom_size: Some(Vec2::new(50.0, 75.0)),
             ..default()
         },
-        Transform::from_xyz(10.0, 21.0, 5.0),
+        Transform::from_xyz(10.0, 48.0, 5.0), // start above ground surface
         Player {
-            gravity: GRAVITY,
             is_grounded: false,
             is_on_platform: false,
             end_game: false,
         },
-        Velocity(Vec2::ZERO),
-        Impulse(Vec2::ZERO),
-        Force(Vec2::ZERO),
-        Mass(1.0),
-        Drag(PLAYER_DRAG_GROUNDED),
-        SpriteSize(Vec2::new(50.0, 75.0)),
-        ColliderExtents(0.5),
+        RigidBody::Dynamic,
+        Collider::cuboid(PLAYER_HALF_W, PLAYER_HALF_H),
+        bevy_rapier2d::prelude::Velocity::zero(),
+        ExternalForce::default(),
+        ExternalImpulse::default(),
+        GravityScale(0.0),           // we apply gravity manually
+        LockedAxes::ROTATION_LOCKED, // prevent tumbling
+        Friction::coefficient(0.0),
+        Restitution::coefficient(0.0),
+        ColliderMassProperties::Mass(1.0),
+        ActiveEvents::COLLISION_EVENTS,
         AnimState {
             min: 0,
             max: 0,
@@ -309,19 +268,8 @@ fn spawn_level1(commands: &mut Commands, asset_server: &AssetServer) {
     let ground_tex: Handle<Image> = asset_server.load("ground.png");
     let paddle_tex: Handle<Image> = asset_server.load("paddle.png");
 
-    // Goal (potato) – top-right
-    commands.spawn((
-        Sprite {
-            image: asset_server.load("potato.png"),
-            custom_size: Some(Vec2::new(29.5, 28.125)),
-            ..default()
-        },
-        Transform::from_xyz(780.0, 530.0, 2.0),
-        Goal,
-        SpriteSize(Vec2::new(29.5, 28.125)),
-        ColliderExtents(0.5),
-        LevelEntity,
-    ));
+    // Goal (potato) – top-right (Rapier sensor)
+    spawn_goal_at(commands, asset_server, 780.0, 530.0);
 
     // Static[0]: wall, 150×200 at (500, 40)
     spawn_platform_lv(
@@ -458,19 +406,8 @@ fn spawn_level2(commands: &mut Commands, asset_server: &AssetServer) {
     let ground_tex: Handle<Image> = asset_server.load("ground.png");
     let paddle_tex: Handle<Image> = asset_server.load("paddle.png");
 
-    // Goal (potato) – top-left, reached by climbing
-    commands.spawn((
-        Sprite {
-            image: asset_server.load("potato.png"),
-            custom_size: Some(Vec2::new(29.5, 28.125)),
-            ..default()
-        },
-        Transform::from_xyz(50.0, 560.0, 2.0),
-        Goal,
-        SpriteSize(Vec2::new(29.5, 28.125)),
-        ColliderExtents(0.5),
-        LevelEntity,
-    ));
+    // Goal (potato) – top-left (Rapier sensor)
+    spawn_goal_at(commands, asset_server, 50.0, 560.0);
 
     // ---- Static Platforms: stepping-stone path ----
 
@@ -640,7 +577,7 @@ fn spawn_level2(commands: &mut Commands, asset_server: &AssetServer) {
     );
 }
 
-/// Spawn a platform tagged with `LevelEntity` so it is despawned between levels.
+/// Spawn a platform with Rapier physics, tagged with `LevelEntity`.
 fn spawn_platform_lv(
     commands: &mut Commands,
     texture: Handle<Image>,
@@ -648,6 +585,7 @@ fn spawn_platform_lv(
     pos: Vec2,
     kind: PlatformKind,
 ) {
+    let is_moving = !matches!(kind, PlatformKind::Static);
     commands.spawn((
         Sprite {
             image: texture,
@@ -655,12 +593,14 @@ fn spawn_platform_lv(
             ..default()
         },
         Transform::from_xyz(pos.x, pos.y, 3.0),
+        if is_moving { RigidBody::KinematicVelocityBased } else { RigidBody::Fixed },
+        Collider::cuboid(size.x / 2.0, size.y / 2.0),
+        bevy_rapier2d::prelude::Velocity::zero(),
+        Friction::coefficient(0.0),
+        Restitution::coefficient(0.0),
         Platform,
         kind,
         SpriteSize(size),
-        ColliderExtents(0.5),
-        Velocity(Vec2::ZERO),
-        Mass(100.0),
         LevelEntity,
     ));
 }
@@ -681,9 +621,11 @@ fn spawn_goal_at(commands: &mut Commands, asset_server: &AssetServer, x: f32, y:
             ..default()
         },
         Transform::from_xyz(x, y, 2.0),
+        RigidBody::Fixed,
+        Collider::cuboid(29.5 / 2.0, 28.125 / 2.0),
+        Sensor,
+        ActiveEvents::COLLISION_EVENTS,
         Goal,
-        SpriteSize(Vec2::new(29.5, 28.125)),
-        ColliderExtents(0.5),
         LevelEntity,
     ));
 }
@@ -1059,48 +1001,52 @@ fn spawn_level_n(c: &mut Commands, a: &AssetServer, level: u32) {
 // ---------------------------------------------------------------------------
 
 fn player_input(
+    time: Res<Time>,
     keys: Res<ButtonInput<KeyCode>>,
+    link: Res<PlayerPlatformLink>,
     mut query: Query<(
         &mut Player,
-        &mut Velocity,
-        &mut Impulse,
-        &mut Force,
-        &mut Drag,
-        &SpriteSize,
+        &mut bevy_rapier2d::prelude::Velocity,
+        &mut ExternalImpulse,
     )>,
 ) {
-    for (player, mut vel, mut imp, mut force, mut drag, _size) in &mut query {
+    let dt = time.delta_secs().min(0.1);
+
+    for (player, mut vel, mut impulse) in &mut query {
         if player.end_game {
             return;
         }
 
-        // Horizontal movement – force = dimension.x * PLAYER_MOVE_FORCE
-        // Player dimension is (50, 75); force matches original: 50 * 5 = 250
-        let move_force = 50.0 * PLAYER_MOVE_FORCE;
+        // Horizontal movement: accumulate velocity (matches original force model)
         if keys.pressed(KeyCode::KeyD) {
-            force.0.x = move_force;
+            vel.linvel.x += MOVE_FORCE * dt;
         }
         if keys.pressed(KeyCode::KeyA) {
-            force.0.x = -move_force;
+            vel.linvel.x -= MOVE_FORCE * dt;
         }
         // Instant stop when neither key pressed (matches original)
         if !keys.pressed(KeyCode::KeyA) && !keys.pressed(KeyCode::KeyD) {
-            vel.0.x = 0.0;
+            vel.linvel.x = 0.0;
         }
 
-        // Jump
-        if keys.pressed(KeyCode::Space) && player.is_grounded {
-            imp.0.y += player.gravity.abs() * JUMP_MULTIPLIER;
+        // Apply platform velocity for riding
+        if player.is_on_platform {
+            vel.linvel.x += link.platform_velocity.x * dt;
         }
 
-        // Grounded state
+        // Jump (just_pressed prevents repeated jumps while held)
+        if keys.just_pressed(KeyCode::Space) && player.is_grounded {
+            impulse.impulse = Vec2::new(0.0, JUMP_IMPULSE);
+        }
+
+        // Manual gravity (GravityScale is 0 – we handle it ourselves to match
+        // the original's frame-dependent feel)
         if player.is_grounded {
-            vel.0.y = 0.0;
-            drag.0 = PLAYER_DRAG_GROUNDED;
+            if vel.linvel.y < 0.0 {
+                vel.linvel.y = 0.0;
+            }
         } else {
-            drag.0 = 0.0;
-            // Frame-rate-dependent gravity (matches original behavior)
-            vel.0.y += player.gravity;
+            vel.linvel.y -= GRAVITY_ACCEL * dt;
         }
     }
 }
@@ -1109,7 +1055,7 @@ fn player_input(
 // Platform Movement System
 // ---------------------------------------------------------------------------
 
-fn platform_movement(mut query: Query<(&mut PlatformKind, &mut Velocity, &SpriteSize, &Transform)>) {
+fn platform_movement(mut query: Query<(&mut PlatformKind, &mut bevy_rapier2d::prelude::Velocity, &SpriteSize, &Transform), With<Platform>>) {
     for (mut kind, mut vel, size, tf) in &mut query {
         let dim_x = size.0.x;
         let dim_y = size.0.y;
@@ -1117,134 +1063,63 @@ fn platform_movement(mut query: Query<(&mut PlatformKind, &mut Velocity, &Sprite
         let py = tf.translation.y;
 
         match kind.as_mut() {
-            PlatformKind::Static => {}
+            PlatformKind::Static => {
+                vel.linvel = Vec2::ZERO;
+            }
 
-            PlatformKind::Horizontal {
-                min_x,
-                max_x,
-                speed,
-                moving_right,
-            } => {
+            PlatformKind::Horizontal { min_x, max_x, speed, moving_right } => {
                 if *moving_right {
-                    vel.0.x = dim_x * *speed;
-                    if px > *max_x {
-                        *moving_right = false;
-                    }
+                    vel.linvel.x = dim_x * *speed;
+                    if px > *max_x { *moving_right = false; }
                 } else {
-                    vel.0.x = -(dim_x * *speed);
-                    if px < *min_x {
-                        *moving_right = true;
-                    }
+                    vel.linvel.x = -(dim_x * *speed);
+                    if px < *min_x { *moving_right = true; }
                 }
             }
 
-            PlatformKind::Vertical {
-                min_y,
-                max_y,
-                speed,
-                moving_up,
-            } => {
+            PlatformKind::Vertical { min_y, max_y, speed, moving_up } => {
                 if *moving_up {
-                    vel.0.y = dim_y * *speed;
-                    if py > *max_y {
-                        *moving_up = false;
-                    }
+                    vel.linvel.y = dim_y * *speed;
+                    if py > *max_y { *moving_up = false; }
                 } else {
-                    vel.0.y = -(dim_y * *speed);
-                    if py <= *min_y {
-                        *moving_up = true;
-                    }
+                    vel.linvel.y = -(dim_y * *speed);
+                    if py <= *min_y { *moving_up = true; }
                 }
             }
 
-            PlatformKind::UpRight {
-                min_x,
-                max_x,
-                speed,
-                moving_right,
-                moving_up,
-            } => {
+            PlatformKind::UpRight { min_x, max_x, speed, moving_right, moving_up } => {
                 if *moving_right {
-                    vel.0.x = dim_x * *speed;
-                    if px > *max_x {
-                        *moving_right = false;
-                        *moving_up = false;
-                    }
+                    vel.linvel.x = dim_x * *speed;
+                    if px > *max_x { *moving_right = false; *moving_up = false; }
                 } else {
-                    vel.0.x = -(dim_x * *speed);
-                    if px < *min_x {
-                        *moving_right = true;
-                        *moving_up = true;
-                    }
+                    vel.linvel.x = -(dim_x * *speed);
+                    if px < *min_x { *moving_right = true; *moving_up = true; }
                 }
-                if *moving_up {
-                    vel.0.y = dim_y * *speed;
-                } else {
-                    vel.0.y = -(dim_y * *speed);
-                }
+                vel.linvel.y = if *moving_up { dim_y * *speed } else { -(dim_y * *speed) };
             }
 
-            PlatformKind::UpLeft {
-                min_x,
-                max_x,
-                speed,
-                moving_right,
-                moving_up,
-            } => {
+            PlatformKind::UpLeft { min_x, max_x, speed, moving_right, moving_up } => {
                 if *moving_right {
-                    vel.0.x = dim_x * *speed;
-                    if px > *max_x {
-                        *moving_right = false;
-                        *moving_up = true;
-                    }
+                    vel.linvel.x = dim_x * *speed;
+                    if px > *max_x { *moving_right = false; *moving_up = true; }
                 } else {
-                    vel.0.x = -(dim_x * *speed);
-                    if px < *min_x {
-                        *moving_right = true;
-                        *moving_up = false;
-                    }
+                    vel.linvel.x = -(dim_x * *speed);
+                    if px < *min_x { *moving_right = true; *moving_up = false; }
                 }
-                if *moving_up {
-                    vel.0.y = dim_y * *speed;
-                } else {
-                    vel.0.y = -(dim_y * *speed);
-                }
+                vel.linvel.y = if *moving_up { dim_y * *speed } else { -(dim_y * *speed) };
             }
 
-            PlatformKind::MultiDir {
-                min_x,
-                mid_x,
-                max_x,
-                speed,
-                moving_right,
-                moving_up,
-                moving_left,
-                moving_down: _,
-            } => {
+            PlatformKind::MultiDir { min_x, mid_x, max_x, speed, moving_right, moving_up, moving_left, moving_down: _ } => {
                 if *moving_right {
-                    vel.0.x = dim_x * *speed;
-                    if *moving_up {
-                        vel.0.y = dim_y * *speed;
-                    }
-                    if px >= 400.0 {
-                        *moving_up = false;
-                        vel.0.y = 0.0;
-                    }
-                    if px > *max_x {
-                        *moving_right = false;
-                        *moving_left = true;
-                    }
+                    vel.linvel.x = dim_x * *speed;
+                    if *moving_up { vel.linvel.y = dim_y * *speed; }
+                    if px >= 400.0 { *moving_up = false; vel.linvel.y = 0.0; }
+                    if px > *max_x { *moving_right = false; *moving_left = true; }
                 }
                 if *moving_left {
-                    vel.0.x = -(dim_x * *speed);
-                    if px <= *mid_x + 150.0 {
-                        vel.0.y = -(dim_y * *speed);
-                    }
-                    if px <= *min_x {
-                        *moving_left = false;
-                        *moving_right = true;
-                        *moving_up = true;
-                    }
+                    vel.linvel.x = -(dim_x * *speed);
+                    if px <= *mid_x + 150.0 { vel.linvel.y = -(dim_y * *speed); }
+                    if px <= *min_x { *moving_left = false; *moving_right = true; *moving_up = true; }
                 }
             }
         }
@@ -1252,153 +1127,67 @@ fn platform_movement(mut query: Query<(&mut PlatformKind, &mut Velocity, &Sprite
 }
 
 // ---------------------------------------------------------------------------
-// Physics Integration System
+// Ground Detection – Rapier raycast from player's feet
 // ---------------------------------------------------------------------------
 
-fn physics_integration(
-    time: Res<Time>,
-    link: Res<PlayerPlatformLink>,
-    mut player_q: Query<
-        (&mut Transform, &mut Velocity, &mut Force, &mut Impulse, &Mass, &Drag, &Player),
-        Without<Platform>,
-    >,
-    mut plat_q: Query<(&mut Transform, &Velocity, &Mass), (With<Platform>, Without<Player>)>,
-) {
-    let dt = time.delta_secs().min(1.0);
-
-    // Integrate player
-    for (mut tf, mut vel, mut force, mut imp, mass, drag, _player) in &mut player_q {
-        let acc = force.0 / mass.0;
-        vel.0 += acc * dt + imp.0 / mass.0;
-
-        // Apply platform velocity (parenting substitute)
-        let plat_offset = link.platform_velocity * dt;
-
-        tf.translation.x += vel.0.x * dt + plat_offset.x;
-        tf.translation.y += vel.0.y * dt + plat_offset.y;
-
-        imp.0 = Vec2::ZERO;
-        force.0 = -vel.0 * drag.0;
-    }
-
-    // Integrate platforms
-    for (mut tf, vel, _mass) in &mut plat_q {
-        tf.translation.x += vel.0.x * dt;
-        tf.translation.y += vel.0.y * dt;
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Collision System
-// ---------------------------------------------------------------------------
-
-fn collision_system(
-    mut player_q: Query<
-        (
-            &mut Transform,
-            &mut Velocity,
-            &mut Player,
-            &SpriteSize,
-            &ColliderExtents,
-        ),
-        Without<Platform>,
-    >,
-    plat_q: Query<
-        (&Transform, &SpriteSize, &ColliderExtents, &Velocity, &PlatformKind),
-        (With<Platform>, Without<Player>, Without<Ground>, Without<Goal>),
-    >,
-    ground_q: Query<
-        (&Transform, &SpriteSize, &ColliderExtents),
-        (With<Ground>, Without<Player>),
-    >,
-    mut goal_q: Query<
-        (&mut Transform, &SpriteSize, &ColliderExtents),
-        (With<Goal>, Without<Player>, Without<Ground>, Without<Platform>),
-    >,
+fn ground_detection(
+    rapier_context: Query<&RapierContext>,
+    mut player_q: Query<(Entity, &Transform, &mut Player)>,
+    plat_q: Query<(Entity, &bevy_rapier2d::prelude::Velocity), With<Platform>>,
     mut link: ResMut<PlayerPlatformLink>,
 ) {
-    for (mut p_tf, mut p_vel, mut player, p_size, p_ext) in &mut player_q {
-        // Reset every frame
+    let Ok(context) = rapier_context.get_single() else { return };
+
+    for (entity, tf, mut player) in &mut player_q {
         player.is_grounded = false;
         player.is_on_platform = false;
         link.platform_velocity = Vec2::ZERO;
 
-        let p_half = half_extents(p_size.0, p_ext.0);
+        // Cast a short ray downward from just inside the player's bottom edge.
+        let ray_origin = Vec2::new(tf.translation.x, tf.translation.y - PLAYER_HALF_H + 1.0);
+        let ray_dir = Vec2::NEG_Y;
+        let max_toi = 4.0; // pixels
 
-        // ---- Platform collisions ----
-        for (pl_tf, pl_size, pl_ext, pl_vel, _kind) in &plat_q {
-            let p_pos = p_tf.translation.truncate();
-            let pl_pos = pl_tf.translation.truncate();
-            let pl_half = half_extents(pl_size.0, pl_ext.0);
+        let filter = QueryFilter::default()
+            .exclude_rigid_body(entity)
+            .exclude_sensors();
 
-            let player_bottom = p_pos.y - p_size.0.y / 2.0;
-            // Platform top (offset by 10px like the original for static tall
-            // platforms that use the -10 check)
-            let platform_top = pl_pos.y + pl_size.0.y / 2.0 - 10.0;
+        if let Some((hit_entity, _toi)) = context.cast_ray(ray_origin, ray_dir, max_toi, true, filter) {
+            player.is_grounded = true;
 
-            if let Some((axis, pen)) = aabb_overlap(p_pos, p_half, pl_pos, pl_half) {
-                // Only land on top, not from sides/below
-                if player_bottom >= platform_top {
-                    p_tf.translation.x += axis.x * pen;
-                    p_tf.translation.y += axis.y * pen;
-                    // Keep 0.5px overlap so grounded persists next frame
-                    if axis.y > 0.0 {
-                        p_tf.translation.y -= 0.5;
-                    }
-                    p_vel.0.y = 0.0;
+            // If we're standing on a moving platform, record its velocity
+            if let Ok((_e, plat_vel)) = plat_q.get(hit_entity) {
+                player.is_on_platform = true;
+                link.platform_velocity = plat_vel.linvel;
+            }
+        }
+    }
+}
 
-                    player.is_grounded = true;
-                    player.is_on_platform = true;
-                    player.gravity = 0.0;
-                    link.platform_velocity = pl_vel.0;
-                    break;
-                } else {
-                    // Side / bottom collision: push out
-                    p_tf.translation.x += axis.x * pen;
-                    p_tf.translation.y += axis.y * pen;
-                    if axis.y < 0.0 {
-                        p_vel.0.y = 0.0;
-                    }
+// ---------------------------------------------------------------------------
+// Goal Detection – Rapier sensor collision events
+// ---------------------------------------------------------------------------
+
+fn goal_detection(
+    mut collision_events: EventReader<CollisionEvent>,
+    goal_q: Query<Entity, With<Goal>>,
+    mut player_q: Query<&mut Player>,
+    mut goal_tf: Query<&mut Transform, (With<Goal>, Without<Player>)>,
+) {
+    for event in collision_events.read() {
+        if let CollisionEvent::Started(e1, e2, _) = event {
+            let goal_entity = if goal_q.contains(*e1) { Some(*e1) }
+                else if goal_q.contains(*e2) { Some(*e2) }
+                else { None };
+
+            if let Some(ge) = goal_entity {
+                if let Ok(mut player) = player_q.get_single_mut() {
+                    player.end_game = true;
+                }
+                if let Ok(mut tf) = goal_tf.get_mut(ge) {
+                    tf.translation.x = 890.0; // move off screen
                 }
             }
-        }
-
-        // ---- Ground collision ----
-        for (g_tf, g_size, g_ext) in &ground_q {
-            let g_pos = g_tf.translation.truncate();
-            let g_half = half_extents(g_size.0, g_ext.0);
-            let p_pos = p_tf.translation.truncate();
-
-            if let Some((axis, pen)) = aabb_overlap(p_pos, p_half, g_pos, g_half) {
-                p_tf.translation.x += axis.x * pen;
-                p_tf.translation.y += axis.y * pen;
-                // Keep 0.5px overlap so grounded persists next frame
-                if axis.y > 0.0 {
-                    p_tf.translation.y -= 0.5;
-                }
-                // Only zero velocity along collision axis (NOT horizontal!)
-                p_vel.0.y = 0.0;
-                player.gravity = 0.0;
-                player.is_grounded = true;
-                player.is_on_platform = false;
-            }
-        }
-
-        // ---- Goal collision ----
-        for (mut g_tf, g_size, g_ext) in &mut goal_q {
-            let g_pos = g_tf.translation.truncate();
-            let g_half = half_extents(g_size.0, g_ext.0);
-            let p_pos = p_tf.translation.truncate();
-
-            if let Some(_) = aabb_overlap(p_pos, p_half, g_pos, g_half) {
-                g_tf.translation.x = 890.0; // move off screen
-                player.end_game = true;
-            }
-        }
-
-        // If in the air, re-enable gravity
-        if !player.is_grounded {
-            player.gravity = GRAVITY;
         }
     }
 }
@@ -1506,9 +1295,8 @@ fn endgame_system(
     mut player_q: Query<(
         &mut Player,
         &mut Transform,
-        &mut Velocity,
-        &mut Impulse,
-        &mut Force,
+        &mut bevy_rapier2d::prelude::Velocity,
+        &mut ExternalImpulse,
         &mut AnimState,
         &mut Sprite,
     )>,
@@ -1516,7 +1304,7 @@ fn endgame_system(
     mut firework_q: Query<(&mut Transform, &mut Visibility), (With<Firework>, Without<WinText>, Without<Player>)>,
     mut text_q: Query<(&mut Visibility, &mut Text2d), (With<WinText>, Without<Firework>, Without<Player>)>,
 ) {
-    let Ok((mut player, mut p_tf, mut vel, mut imp, mut force, mut anim, mut sprite)) =
+    let Ok((mut player, mut p_tf, mut vel, mut imp, mut anim, mut sprite)) =
         player_q.get_single_mut()
     else {
         return;
@@ -1538,12 +1326,12 @@ fn endgame_system(
         player.end_game = false;
         player.is_grounded = false;
         player.is_on_platform = false;
-        player.gravity = GRAVITY;
         p_tf.translation.x = 10.0;
-        p_tf.translation.y = 21.0;
-        vel.0 = Vec2::ZERO;
-        imp.0 = Vec2::ZERO;
-        force.0 = Vec2::ZERO;
+        p_tf.translation.y = 48.0;
+        vel.linvel = Vec2::ZERO;
+        vel.angvel = 0.0;
+        imp.impulse = Vec2::ZERO;
+        imp.torque_impulse = 0.0;
         anim.idx = 0;
         anim.min = 0;
         anim.max = 0;
@@ -1611,21 +1399,24 @@ fn main() {
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
-                title: "Mario Platformer – Bevy".to_string(),
+                title: "Mario Platformer – Bevy + Rapier".to_string(),
                 resolution: (WINDOW_WIDTH, WINDOW_HEIGHT).into(),
                 resizable: false,
                 ..default()
             }),
             ..default()
         }))
+        .add_plugins(
+            RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(1.0),
+        )
         .add_systems(Startup, setup)
         .add_systems(
             Update,
             (
-                player_input,
                 platform_movement,
-                physics_integration,
-                collision_system,
+                player_input,
+                ground_detection,
+                goal_detection,
                 animation_system,
                 endgame_system,
                 level_banner_system,
