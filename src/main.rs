@@ -1323,15 +1323,15 @@ fn collision_system(
         player.is_on_platform = false;
         link.platform_velocity = Vec2::ZERO;
 
-        let p_pos = p_tf.translation.truncate();
         let p_half = half_extents(p_size.0, p_ext.0);
-        let player_bottom = p_pos.y - p_size.0.y / 2.0;
 
         // ---- Platform collisions ----
         for (pl_tf, pl_size, pl_ext, pl_vel, _kind) in &plat_q {
+            let p_pos = p_tf.translation.truncate();
             let pl_pos = pl_tf.translation.truncate();
             let pl_half = half_extents(pl_size.0, pl_ext.0);
 
+            let player_bottom = p_pos.y - p_size.0.y / 2.0;
             // Platform top (offset by 10px like the original for static tall
             // platforms that use the -10 check)
             let platform_top = pl_pos.y + pl_size.0.y / 2.0 - 10.0;
@@ -1339,9 +1339,13 @@ fn collision_system(
             if let Some((axis, pen)) = aabb_overlap(p_pos, p_half, pl_pos, pl_half) {
                 // Only land on top, not from sides/below
                 if player_bottom >= platform_top {
-                    // Push player out
                     p_tf.translation.x += axis.x * pen;
                     p_tf.translation.y += axis.y * pen;
+                    // Keep 0.5px overlap so grounded persists next frame
+                    if axis.y > 0.0 {
+                        p_tf.translation.y -= 0.5;
+                    }
+                    p_vel.0.y = 0.0;
 
                     player.is_grounded = true;
                     player.is_on_platform = true;
@@ -1349,11 +1353,10 @@ fn collision_system(
                     link.platform_velocity = pl_vel.0;
                     break;
                 } else {
-                    // Side / bottom collision: still push out
+                    // Side / bottom collision: push out
                     p_tf.translation.x += axis.x * pen;
                     p_tf.translation.y += axis.y * pen;
                     if axis.y < 0.0 {
-                        // Hit platform from below – stop upward velocity
                         p_vel.0.y = 0.0;
                     }
                 }
@@ -1369,7 +1372,12 @@ fn collision_system(
             if let Some((axis, pen)) = aabb_overlap(p_pos, p_half, g_pos, g_half) {
                 p_tf.translation.x += axis.x * pen;
                 p_tf.translation.y += axis.y * pen;
-                p_vel.0 = Vec2::ZERO;
+                // Keep 0.5px overlap so grounded persists next frame
+                if axis.y > 0.0 {
+                    p_tf.translation.y -= 0.5;
+                }
+                // Only zero velocity along collision axis (NOT horizontal!)
+                p_vel.0.y = 0.0;
                 player.gravity = 0.0;
                 player.is_grounded = true;
                 player.is_on_platform = false;
